@@ -1,20 +1,51 @@
-menu "Example Configuration"
+menu "Project Specific Configuration"
 
-config ESP_WIFI_SSID
-    string "WiFi SSID"
-    default "myssid"
-    help
-	SSID (network name) for the example to connect to.
+    menu "Components"
 
-config ESP_WIFI_PASSWORD
-    string "WiFi Password"
-    default "mypassword"
-    help
-	WiFi password (WPA or WPA2) for the example to use.
-		
-config MAX_STA_CONN
-    int "Maximal STA connections"
-    default 4
-    help
-	Max number of the STA connects to AP.
+        menu "WIFI"
+
+            config RGB_CONTROLLER_AP_SSID
+                string "AP WiFi SSID"
+                default "myssid"
+                help
+                SSID (network name) for the example to connect to.
+
+            config RGB_CONTROLLER_AP_PWD
+                string "AP WiFi Password"
+                default "mypassword"
+                help
+                WiFi password (WPA or WPA2) for the example to use.
+                    
+            config RGB_CONTROLLER_MAX_STA_CON
+                int "AP Maximal STA connections"
+                default 4
+                help
+                Max number of the STA connects to AP.
+
+        endmenu
+
+        menu "RGB Led Strip"
+
+            config RGB_CONTROLLER_R_Channel
+                string "GPIO For the R channel"
+                default "19"
+                help
+                Select the GPIO where to connect the R led strip
+
+            config RGB_CONTROLLER_G_Channel
+                string "GPIO For the G channel"
+                default "5"
+                help
+                Select the GPIO where to connect the G led strip
+                    
+            config RGB_CONTROLLER_B_Channel
+                string "GPIO For the B channel"
+                default "18"
+                help
+                Select the GPIO where to connect the B led strip
+
+        endmenu
+
+    endmenu
+
 endmenu
