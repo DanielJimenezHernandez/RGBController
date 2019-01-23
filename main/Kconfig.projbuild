@@ -22,6 +22,12 @@ menu "Project Specific Configuration"
                 help
                 Max number of the STA connects to AP.
 
+            config RGB_CONTROLLER_MAX_RETRIES
+                int "AP Maximal Number of retries to the sta"
+                default 5
+                help
+                AP Maximal Number of retries to the STA.
+
         endmenu
 
         menu "RGB Led Strip"
