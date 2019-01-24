@@ -21,6 +21,8 @@
 
 #include "statemachine.h"
 
+static EventGroupHandle_t s_wifi_event_group;
+
 /* The examples use WiFi configuration that you can set via 'make menuconfig'.
 
    If you'd rather not, just change the below entries to strings with
@@ -38,20 +40,28 @@
 
 /* Struct to control wifi configs*/
 wifi_config_t wifi_config;
+const static int AP_CONNECTED_BIT = BIT0;
+const static int AP_GOT_CONFIG_BIT = BIT1;
+const static int STA_CONNECTED = BIT2;
+const static int STA_TIMEOUT = BIT3;
 
 static const char *TAG = "WiFi_Config";
 
 static int s_retry_num = 0;
 
-void switch_to_ap_config();
 
-void dummy_get_params(wifi_config_t * wifi_params){
-    strncpy((char *)&wifi_params->sta.ssid[0],HARDCODED_SSID,strlen(HARDCODED_SSID));
-    strncpy((char *)&wifi_params->sta.password[0],HARDCODED_PASSWD,strlen(HARDCODED_PASSWD));
-    /* wen stored in flash this configs are modified*/
-    wifi_params->sta.scan_method = 0;
-    wifi_params->sta.bssid_set = 0;
+void dummy_get_params(void *pvParameter){
+    wifi_config_t wifi_config_tmp = {
+        .sta = {
+            .ssid = HARDCODED_SSID,
+            .password = HARDCODED_PASSWD
+        },
+    };
+    memcpy(&wifi_config,&wifi_config_tmp,sizeof(wifi_config_tmp));
+    xEventGroupSetBits(s_wifi_event_group, AP_GOT_CONFIG_BIT);
+    vTaskDelete(NULL);
 }
+
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
 {
@@ -61,12 +71,13 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
         break;
     case SYSTEM_EVENT_STA_STOP:
         ESP_LOGI(TAG,"STA STOP");
-        switch_to_ap_config();
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
         ESP_LOGI(TAG, "got ip:%s",
                  ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));
         s_retry_num = 0;
+        xEventGroupSetBits(s_wifi_event_group, STA_CONNECTED);
+         xEventGroupClearBits(s_wifi_event_group, STA_TIMEOUT);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         {
@@ -76,6 +87,8 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
                 ESP_LOGI(TAG,"retry to connect to the AP");
             }
             else{
+                xEventGroupSetBits(s_wifi_event_group, STA_TIMEOUT);
+                xEventGroupClearBits(s_wifi_event_group,STA_CONNECTED);
                 ESP_LOGI(TAG,"connect to the AP fail\n");
                 /*TODO: Init AP config again*/
                 esp_wifi_stop();
@@ -89,20 +102,17 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
                  MAC2STR(event->event_info.sta_connected.mac),
                  event->event_info.sta_connected.aid);
         /*TOD: Replace this with udp service to get configs*/
-        dummy_get_params(&wifi_config);
-        /*Once we get wifi params connect to the access point configured in the wifi_global_params*/
-        esp_wifi_stop();
+        xEventGroupSetBits(s_wifi_event_group, AP_CONNECTED_BIT);
+        xTaskCreate(&dummy_get_params, "dummy_get_params", configMINIMAL_STACK_SIZE, NULL, 5, NULL);
         break;
     case SYSTEM_EVENT_AP_STADISCONNECTED:
         ESP_LOGI(TAG, "station:"MACSTR"leave, AID=%d",
                  MAC2STR(event->event_info.sta_disconnected.mac),
                  event->event_info.sta_disconnected.aid);
+        xEventGroupClearBits(s_wifi_event_group, AP_CONNECTED_BIT);
         break;
     case SYSTEM_EVENT_AP_STOP:
         ESP_LOGI(TAG,"AP STOP");
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
-        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
-        ESP_ERROR_CHECK(esp_wifi_start() );
         break;
     default:
         break;
@@ -110,30 +120,9 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
     return ESP_OK;
 }
 
-void switch_to_ap_config(){
-    /* fill config struct*/
-    strncpy((char *)&wifi_config.ap.ssid[0],CONFIG_RGB_CONTROLLER_AP_SSID,sizeof(wifi_config.ap.ssid));
-    wifi_config.ap.ssid_len = strlen(CONFIG_RGB_CONTROLLER_AP_SSID);
-    strncpy((char *)&wifi_config.ap.password[0],CONFIG_RGB_CONTROLLER_AP_PWD,sizeof(wifi_config.ap.password));
-    wifi_config.ap.max_connection = CONFIG_RGB_CONTROLLER_MAX_STA_CON;
-    wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
 
-    if (strlen(CONFIG_RGB_CONTROLLER_AP_PWD) == 0){
-        wifi_config.ap.authmode = WIFI_AUTH_OPEN;
-    }
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
-
-    ESP_LOGI(TAG, "wifi_init_softap finished.SSID:%s password:%s",
-            CONFIG_RGB_CONTROLLER_AP_SSID, CONFIG_RGB_CONTROLLER_AP_PWD);
-}
-
-void wifi_config_init(){
-    /*create an LwIP core task and initialize LwIP-related work*/
-    tcpip_adapter_init();
-    /*create a system Event task and initialize an application event’s callback function*/
-    ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
+void wifi_task(void *pvParameter){
+    
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_get_config(ESP_IF_WIFI_STA,&wifi_config));
@@ -143,7 +132,24 @@ void wifi_config_init(){
     ESP_LOGI(TAG,"wifi_config sta.ssid: [%s]",wifi_config.sta.ssid);
     /* If initial config from NVS is empty start ap and get gredentials*/
     if (strcmp((char *)wifi_config.sta.ssid, "") == 0){
-        switch_to_ap_config();
+        /* fill config struct*/
+        strncpy((char *)&wifi_config.ap.ssid[0],CONFIG_RGB_CONTROLLER_AP_SSID,sizeof(wifi_config.ap.ssid));
+        wifi_config.ap.ssid_len = strlen(CONFIG_RGB_CONTROLLER_AP_SSID);
+        strncpy((char *)&wifi_config.ap.password[0],CONFIG_RGB_CONTROLLER_AP_PWD,sizeof(wifi_config.ap.password));
+        wifi_config.ap.max_connection = CONFIG_RGB_CONTROLLER_MAX_STA_CON;
+        wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+
+        if (strlen(CONFIG_RGB_CONTROLLER_AP_PWD) == 0){
+            wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+        }
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &wifi_config));
+        ESP_ERROR_CHECK(esp_wifi_start());
+
+        ESP_LOGI(TAG, "wifi_init_softap finished.SSID:%s password:%s",
+                CONFIG_RGB_CONTROLLER_AP_SSID, CONFIG_RGB_CONTROLLER_AP_PWD);
+        ESP_LOGI(TAG,"Waiting for conection on the AP and to get config for initiate ap connection....");
+        xEventGroupWaitBits(s_wifi_event_group, AP_CONNECTED_BIT | AP_GOT_CONFIG_BIT, false, true, portMAX_DELAY);
     }
     else{
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
@@ -151,8 +157,41 @@ void wifi_config_init(){
         ESP_ERROR_CHECK(esp_wifi_start() );
         ESP_LOGI(TAG, "wifi_init_sta finished.");
         ESP_LOGI(TAG, "connect to sta SSID:%s password:%s",
-             wifi_config.sta.ssid, wifi_config.sta.password);
+            wifi_config.sta.ssid, wifi_config.sta.password);
+        xEventGroupWaitBits(s_wifi_event_group, STA_CONNECTED | STA_TIMEOUT, false, false, portMAX_DELAY);
+        
     }
+    while(1){
+        if (xEventGroupGetBits(s_wifi_event_group) & STA_CONNECTED){
+            ESP_LOGI(TAG,"STA Connected Sucessfully");
+            //vTaskDelete(NULL);
+        }
+        else if(xEventGroupGetBits(s_wifi_event_group) & STA_TIMEOUT){
+            ESP_LOGI(TAG,"STA Timed Out setting config mode again...");
+            /*Config Mode*/
+        }
+        else if(xEventGroupGetBits(s_wifi_event_group) & AP_GOT_CONFIG_BIT){
+            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
+            ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
+            ESP_ERROR_CHECK(esp_wifi_start() );
+            ESP_LOGI(TAG, "wifi_init_sta finished.");
+            ESP_LOGI(TAG, "connect to sta SSID:%s password:%s",
+            wifi_config.sta.ssid, wifi_config.sta.password);
+            xEventGroupWaitBits(s_wifi_event_group, STA_CONNECTED | STA_TIMEOUT, false, false, portMAX_DELAY);
+         }
+        ESP_LOGI(TAG,"Wifi Task Running...");
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+    }
+}
+
+void wifi_config_init(){
+    /* create the evnt group */
+    s_wifi_event_group = xEventGroupCreate();
+    /*create an LwIP core task and initialize LwIP-related work*/
+    tcpip_adapter_init();
+    /*create a system Event task and initialize an application event’s callback function*/
+    ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
+    xTaskCreate(&wifi_task, "wifi_task", 2048, NULL, 5, NULL);
 }
 
 
