@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "driver/ledc.h"
 #include "esp_err.h"
+#include "esp_log.h"
 #include "led_control.h"
 
 /*
@@ -50,10 +51,11 @@ d19 = B
 #define LEDC_TEST_DUTY         (4000)
 #define LEDC_TEST_FADE_TIME    (3000)
 
+uint32_t brightness_limit = 8191;
 //uint32_t brightness_limit = 8191;
-uint32_t brightness_limit = 250;
+sLed_state global_led_state;
 
-led_mode_e = led_mode = LED_MODE_STOPPED;
+static const char *TAG = "Led_Control";
 
 /*
     * Prepare and set configuration of timers
@@ -106,6 +108,14 @@ ledc_channel_config_t ledc_channel[LEDC_TEST_CH_NUM] = {
     },
 };
 
+eLed_mode get_led_mode(){
+    return global_led_state.mode;
+}
+
+sLed_state get_led_state(){
+    return global_led_state;
+}
+
 void set_color(uint8_t r,uint8_t g,uint8_t b){
     /* color sanity check*/
     if (r > 254){r = 254;}else if(r < 0){r = 0;}
@@ -117,19 +127,49 @@ void set_color(uint8_t r,uint8_t g,uint8_t b){
     uint32_t g_duty = g * brightness_limit / 255;
     uint32_t b_duty = b * brightness_limit / 255;
         
-    ledc_set_duty(ledc_channel[LEDC_R].speed_mode, ledc_channel[LEDC_R].channel, r_duty);
-    ledc_update_duty(ledc_channel[LEDC_R].speed_mode, ledc_channel[LEDC_R].channel);
-
-    ledc_set_duty(ledc_channel[LEDC_G].speed_mode, ledc_channel[LEDC_G].channel, g_duty);
-    ledc_update_duty(ledc_channel[LEDC_G].speed_mode, ledc_channel[LEDC_G].channel);
-
-    ledc_set_duty(ledc_channel[LEDC_B].speed_mode, ledc_channel[LEDC_B].channel, b_duty);
-    ledc_update_duty(ledc_channel[LEDC_B].speed_mode, ledc_channel[LEDC_B].channel);
+    if(ledc_set_duty(ledc_channel[LEDC_R].speed_mode, ledc_channel[LEDC_R].channel, r_duty) == ESP_OK){
+            if (ledc_update_duty(ledc_channel[LEDC_R].speed_mode, ledc_channel[LEDC_R].channel) == ESP_OK){
+                global_led_state.r.duty = r_duty;
+                global_led_state.r.hex_val = r;
+            }
+            else{
+                ESP_LOGE(TAG, "Error updating PWM Value");
+            }
+    }
+    else{
+        ESP_LOGE(TAG, "Error setting PWM Value");
+    }
+    if(ledc_set_duty(ledc_channel[LEDC_G].speed_mode, ledc_channel[LEDC_G].channel, g_duty) == ESP_OK){
+            if (ledc_update_duty(ledc_channel[LEDC_G].speed_mode, ledc_channel[LEDC_G].channel) == ESP_OK){
+                global_led_state.g.duty = g_duty;
+                global_led_state.g.hex_val = g;
+            }
+            else{
+                ESP_LOGE(TAG, "Error updating PWM Value");
+            }
+    }
+    else{
+        ESP_LOGE(TAG, "Error setting PWM Value");
+    }
+    if(ledc_set_duty(ledc_channel[LEDC_B].speed_mode, ledc_channel[LEDC_B].channel, b_duty) == ESP_OK){
+            if (ledc_update_duty(ledc_channel[LEDC_B].speed_mode, ledc_channel[LEDC_B].channel) == ESP_OK){
+                global_led_state.b.duty = b_duty;
+                global_led_state.b.hex_val = b;
+            }
+            else{
+                ESP_LOGE(TAG, "Error updating PWM Value");
+            }
+    }
+    else{
+        ESP_LOGE(TAG, "Error setting PWM Value");
+    }
 }
+ 
+
 
 void led_task(void *pvParameter){
     while(1){
-        switch(led_mode){
+        switch(get_led_mode()){
             case LED_MODE_CONNECTING_TO_AP:
                 break;
             case LED_MODE_READY_FOR_CONFIG:
@@ -156,7 +196,7 @@ void led_task(void *pvParameter){
 void led_control_init()
 {
     int ch;
-
+    global_led_state.mode = LED_MODE_STOPPED;
     // Set configuration of timer0 for high speed channels
     ledc_timer_config(&ledc_timer);
 
@@ -168,29 +208,5 @@ void led_control_init()
     // Initialize fade service.
     ledc_fade_func_install(0);
 
-    while (1) {
-        set_color(255,0,0);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        set_color(0,255,0);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        set_color(0,0,255);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        set_color(0,0,0);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        set_color(255,255,0);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        set_color(0,255,255);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        set_color(255,255,255);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-        set_color(255,255,255);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
+    xTaskCreate(&led_task, "led_task", 1024, NULL, 5, NULL);
 }

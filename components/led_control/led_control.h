@@ -12,8 +12,21 @@ typedef enum led_mode_ {
     LED_MODE_STROBE,
     LED_MODE_STOPPED
 
-}led_mode_e;
+}eLed_mode;
 
+typedef struct {
+    uint32_t duty;
+    uint8_t hex_val;
+}led_info;
+
+typedef struct {
+    eLed_mode mode;
+    uint32_t bightness;      /*configured brignthness*/
+    uint16_t fadetime;
+    led_info r;
+    led_info g;
+    led_info b;
+} sLed_state;
 
 void led_control_init();
 
