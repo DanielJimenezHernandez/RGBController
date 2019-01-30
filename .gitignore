@@ -1,3 +1,5 @@
 build
 sdkconfig*
 .vscode
+
+set_env\.sh
