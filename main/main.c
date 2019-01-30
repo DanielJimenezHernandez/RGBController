@@ -18,9 +18,12 @@
 #include "wifi.h"
 #include "statemachine.h"
 #include "led_control.h"
+#include "mqtt_client_component.h"
 
 #include "esp_log.h"
 #include "nvs_flash.h"
+
+
 
 sLed_state led_config_s;
 
@@ -31,6 +34,8 @@ void callback(State st){
         case STATE_WIFI_CONNECTING:
             break;
         case STATE_WIFI_CONNECTED:
+            ESP_LOGI("Main App", "Wifi Connected to station");
+            mqtt_init();
             break;
         case STATE_AP_STARTED:
             ESP_LOGI("Main App", "ESP_WIFI_MODE_AP");
@@ -38,6 +43,7 @@ void callback(State st){
         case STATE_AP_GOT_CONFIG:
             break;
         case STATE_MQTT_CONNECTED:
+            ESP_LOGI("Main App", "MQTT Connected and ready to receive messages");
             break;
         case STATE_RGB_STARTING:
             break;

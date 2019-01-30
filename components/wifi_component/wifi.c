@@ -78,7 +78,9 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
                  ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, STA_CONNECTED);
-         xEventGroupClearBits(s_wifi_event_group, STA_TIMEOUT);
+        xEventGroupClearBits(s_wifi_event_group, STA_TIMEOUT);
+        /*Set system state to wifi connected */
+        set_system_state(STATE_WIFI_CONNECTED);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         {
