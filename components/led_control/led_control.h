@@ -28,6 +28,8 @@ typedef struct {
     led_info b;
 } sLed_state;
 
+
 void led_control_init();
+void change_mode(sLed_state *rgb_config);
 
 #endif /* LED_CONTROL_H */

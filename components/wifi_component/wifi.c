@@ -44,6 +44,7 @@ const static int AP_CONNECTED_BIT = BIT0;
 const static int AP_GOT_CONFIG_BIT = BIT1;
 const static int STA_CONNECTED = BIT2;
 const static int STA_TIMEOUT = BIT3;
+const static int WIFI_FIRST_INIT = BIT4;
 
 static const char *TAG = "WiFi_Config";
 
@@ -163,8 +164,7 @@ void wifi_task(void *pvParameter){
     }
     while(1){
         if (xEventGroupGetBits(s_wifi_event_group) & STA_CONNECTED){
-            ESP_LOGI(TAG,"STA Connected Sucessfully");
-            //vTaskDelete(NULL);
+            ESP_LOGI(TAG,"STA Connected Sucessfully Suspending task...");
         }
         else if(xEventGroupGetBits(s_wifi_event_group) & STA_TIMEOUT){
             ESP_LOGI(TAG,"STA Timed Out setting config mode again...");
@@ -191,6 +191,7 @@ void wifi_config_init(){
     tcpip_adapter_init();
     /*create a system Event task and initialize an application event’s callback function*/
     ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
+    xEventGroupSetBits(s_wifi_event_group, WIFI_FIRST_INIT);
     xTaskCreate(&wifi_task, "wifi_task", 2048, NULL, 5, NULL);
 }
 

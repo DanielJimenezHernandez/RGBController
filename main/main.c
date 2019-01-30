@@ -22,6 +22,8 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 
+sLed_state led_config_s;
+
 void callback(State st){
     switch(st){
         case STATE_INIT:
@@ -50,16 +52,32 @@ void callback(State st){
 }
 
 void app_main(){
-    // //Initialize NVS
-    // esp_err_t ret = nvs_flash_init();
-    // if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-    //   ESP_ERROR_CHECK(nvs_flash_erase());
-    //   ret = nvs_flash_init();
-    // }
-    // ESP_ERROR_CHECK(ret);
+    //Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+      ESP_ERROR_CHECK(nvs_flash_erase());
+      ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
     
-    // ESP_LOGI("Main App", "ESP_WIFI_MODE_AP");
-    // init_sm(&callback);
-    // wifi_config_init();
+    ESP_LOGI("Main App", "ESP_WIFI_MODE_AP");
+    init_sm(&callback);
+    wifi_config_init();
     led_control_init();
+    while(1){
+        led_config_s.mode = LED_MODE_FADE;
+        led_config_s.r.hex_val = 65;
+        led_config_s.g.hex_val = 230;
+        led_config_s.b.hex_val = 230;
+        change_mode(&led_config_s);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+        led_config_s.mode = LED_MODE_FADE;
+        led_config_s.r.hex_val = 229;
+        led_config_s.g.hex_val = 65;
+        led_config_s.b.hex_val = 244;
+        change_mode(&led_config_s);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+    
 }
