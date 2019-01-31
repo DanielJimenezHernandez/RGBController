@@ -33,23 +33,39 @@ menu "Project Specific Configuration"
         menu "RGB Led Strip"
 
             config RGB_CONTROLLER_R_Channel
-                string "GPIO For the R channel"
-                default "19"
+                int "GPIO For the R channel"
+                default 19
                 help
                 Select the GPIO where to connect the R led strip
 
             config RGB_CONTROLLER_G_Channel
-                string "GPIO For the G channel"
-                default "5"
+                int "GPIO For the G channel"
+                default 5
                 help
                 Select the GPIO where to connect the G led strip
                     
             config RGB_CONTROLLER_B_Channel
-                string "GPIO For the B channel"
-                default "18"
+                int "GPIO For the B channel"
+                default 18
                 help
                 Select the GPIO where to connect the B led strip
 
+        endmenu
+
+        menu "MQTT"
+
+            config MQTT_DEF_BROKER
+                string "Default Broker"
+                default "mqtt://192.168.1.2"
+                help
+                Default broker address to try on first connect the default port is 1883
+
+            config MQTT_SUBSCRIBERS
+                int "Number of subscribers"
+                default 3
+                help
+                Number of topics to subscribe. Fill the structure with the correct number of subscribers configured here
+        
         endmenu
 
     endmenu
