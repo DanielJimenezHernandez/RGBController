@@ -167,6 +167,7 @@ void wifi_task(void *pvParameter){
     while(1){
         if (xEventGroupGetBits(s_wifi_event_group) & STA_CONNECTED){
             ESP_LOGI(TAG,"STA Connected Sucessfully Suspending task...");
+            vTaskSuspend( NULL );
         }
         else if(xEventGroupGetBits(s_wifi_event_group) & STA_TIMEOUT){
             ESP_LOGI(TAG,"STA Timed Out setting config mode again...");
