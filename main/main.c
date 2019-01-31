@@ -23,6 +23,15 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 
+#include "cJSON.h"
+
+/*Structs for mqtt subscribing topics and configs*/
+
+#define BASE_TOPIC "/RGBController/"
+
+#define TOPIC_1 "set_static"
+#define TOPIC_2 "set_fade"
+#define TOPIC_3 "set_static"
 
 
 sLed_state led_config_s;
@@ -57,6 +66,65 @@ void callback(State st){
     }
 }
 
+void callback_set_static(char *data){
+    cJSON *root = cJSON_Parse(data);
+    cJSON *format = cJSON_GetObjectItem(root,"colors");
+    int red = cJSON_GetObjectItem(format,"red")->valueint;
+    int green = cJSON_GetObjectItem(format,"green")->valueint;
+    int blue = cJSON_GetObjectItem(format,"blue")->valueint;
+    ESP_LOGI("Main App", "Got Colors r[%d]g[%d]b[%d]",red,green,blue);
+    cJSON_Delete(root);
+
+    led_config_s.mode = LED_MODE_STATIC;
+    led_config_s.r.hex_val = red;
+    led_config_s.g.hex_val = green;
+    led_config_s.b.hex_val = blue;
+    change_mode(&led_config_s);
+}
+
+void callback_set_fade(char *data){
+    cJSON *root = cJSON_Parse(data);
+    cJSON *format = cJSON_GetObjectItem(root,"colors");
+    int red = cJSON_GetObjectItem(format,"red")->valueint;
+    int green = cJSON_GetObjectItem(format,"green")->valueint;
+    int blue = cJSON_GetObjectItem(format,"blue")->valueint;
+    ESP_LOGI("Main App", "Got Colors r[%d]g[%d]b[%d]",red,green,blue);
+    cJSON_Delete(root);
+
+    led_config_s.mode = LED_MODE_FADE;
+    led_config_s.r.hex_val = red;
+    led_config_s.g.hex_val = green;
+    led_config_s.b.hex_val = blue;
+    change_mode(&led_config_s);
+}
+
+mqtt_subscribers mqtt_configs={
+    {
+        .base_topic = "/RGBController/",
+        .base_t_len = sizeof(BASE_TOPIC),
+        .sub_topic = TOPIC_1,
+        .sub_t_len = sizeof(TOPIC_1),
+        .qos = 0,
+        .callback = &callback_set_static
+    },
+    {
+        .base_topic = "/RGBController/",
+        .base_t_len = sizeof(BASE_TOPIC),
+        .sub_topic = TOPIC_2,
+        .sub_t_len = sizeof(TOPIC_2),
+        .qos = 0,
+        .callback = &callback_set_fade
+    },
+    {
+        .base_topic = "/RGBController/",
+        .base_t_len = sizeof(BASE_TOPIC),
+        .sub_topic = TOPIC_3,
+        .sub_t_len = sizeof(TOPIC_3),
+        .qos = 0,
+        .callback = &callback_set_static
+    }
+    };
+
 void app_main(){
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -65,25 +133,19 @@ void app_main(){
       ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-    
+
+
+    /*Helper function to fill topics*/
+    for(uint8_t i = 0; i < NUMBER_OF_SUBSCRIBERS; i++){
+        constructTopic(&mqtt_configs[i]);
+    }
+
+    mqtt_set_config(&mqtt_configs);
+
     ESP_LOGI("Main App", "ESP_WIFI_MODE_AP");
     init_sm(&callback);
     wifi_config_init();
     led_control_init();
-    while(1){
-        led_config_s.mode = LED_MODE_FADE;
-        led_config_s.r.hex_val = 65;
-        led_config_s.g.hex_val = 230;
-        led_config_s.b.hex_val = 230;
-        change_mode(&led_config_s);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-        led_config_s.mode = LED_MODE_FADE;
-        led_config_s.r.hex_val = 229;
-        led_config_s.g.hex_val = 65;
-        led_config_s.b.hex_val = 244;
-        change_mode(&led_config_s);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
     
 }

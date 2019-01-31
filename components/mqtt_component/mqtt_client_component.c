@@ -23,8 +23,31 @@
 #include "mqtt_client_component.h"
 #include "statemachine.h"
 
-static const char *TAG = "MQTT_EXAMPLE";
+static const char *TAG = "MQTT component";
 
+mqtt_subscribers *config_ptr;
+
+mqtt_callback_t mqtt_callback;
+
+void constructTopic(mqtt_component_client_config *config_struct){
+    uint8_t count = 0;
+    if ((config_struct->base_t_len + config_struct->sub_t_len) > FULL_TOPIC_MAX_LEN){
+        ESP_LOGE(TAG,"Topic Too Long to use...");
+    }
+
+    for (uint8_t i = 0; i < config_struct->base_t_len - 1; i++){
+        config_struct->full_topic[count] = config_struct->base_topic[i];
+        count++;
+    }
+
+    for (uint8_t i = 0; i < config_struct->sub_t_len - 1; i++){
+        config_struct->full_topic[count] = config_struct->sub_topic[i];
+        count++;
+    }
+    config_struct->full_topic[count+1] = '\0';
+    config_struct->full_topic_len = count;
+
+}
 
 static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 {
@@ -35,17 +58,13 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
         case MQTT_EVENT_CONNECTED:
             set_system_state(STATE_MQTT_CONNECTED);
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-            msg_id = esp_mqtt_client_publish(client, "/topic/qos1", "data_3", 0, 1, 0);
-            ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
-
-            msg_id = esp_mqtt_client_subscribe(client, "/topic/qos0", 0);
-            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
-            msg_id = esp_mqtt_client_subscribe(client, "/topic/qos1", 1);
-            ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
-            msg_id = esp_mqtt_client_unsubscribe(client, "/topic/qos1");
-            ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
+            for(int i = 0; i < NUMBER_OF_SUBSCRIBERS; i++){
+                // ESP_LOGI(TAG, "Subscribing to %s with qos = %d",
+                //         (*config_ptr)[i].full_topic,(*config_ptr)[i].qos);
+                
+                msg_id = esp_mqtt_client_subscribe(client, (*config_ptr)[i].full_topic, (*config_ptr)[i].qos);
+                ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+            }
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -66,6 +85,19 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
             ESP_LOGI(TAG, "MQTT_EVENT_DATA");
             printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
             printf("DATA=%.*s\r\n", event->data_len, event->data);
+
+            for (uint8_t i = 0; i < NUMBER_OF_SUBSCRIBERS; i++){
+                int ret = memcmp((*config_ptr)[i].full_topic,event->topic,event->topic_len);
+                if(ret == 0){
+                    ESP_LOGI(TAG,"Topic = %s",(*config_ptr)[i].full_topic);
+                    if((*config_ptr)[i].callback != NULL){
+                        (*config_ptr)[i].callback(event->data);
+                    }
+                }
+                else{
+                    ESP_LOGI(TAG,"ret = %d",ret);
+                }
+            }
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
@@ -106,4 +138,8 @@ void mqtt_init()
     esp_log_level_set("OUTBOX", ESP_LOG_VERBOSE);
 
     mqtt_app_start();
+}
+
+void mqtt_set_config(mqtt_subscribers *config){
+    config_ptr = config;
 }
