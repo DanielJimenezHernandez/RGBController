@@ -22,7 +22,7 @@ typedef struct {
 typedef struct {
     eLed_mode mode;
     uint32_t bightness;      /*configured brignthness*/
-    uint16_t fadetime;
+    uint32_t fadetime;
     led_info r;
     led_info g;
     led_info b;
