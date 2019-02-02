@@ -56,7 +56,6 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
     // your_context_t *context = event->context;
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
-            set_system_state(STATE_MQTT_CONNECTED);
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
             for(int i = 0; i < NUMBER_OF_SUBSCRIBERS; i++){
                 // ESP_LOGI(TAG, "Subscribing to %s with qos = %d",
@@ -65,6 +64,7 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
                 msg_id = esp_mqtt_client_subscribe(client, (*config_ptr)[i].full_topic, (*config_ptr)[i].qos);
                 ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
             }
+            set_system_state(STATE_MQTT_CONNECTED);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");

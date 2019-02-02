@@ -189,6 +189,7 @@ void wifi_task(void *pvParameter){
 
 void wifi_config_init(){
     /* create the evnt group */
+    set_system_state(STATE_WIFI_CONNECTING);
     s_wifi_event_group = xEventGroupCreate();
     /*create an LwIP core task and initialize LwIP-related work*/
     tcpip_adapter_init();
