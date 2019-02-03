@@ -32,7 +32,7 @@
 static const char *TAG = "Led Control";
 
 /*semaphore for accesing the led peripheral*/
-SemaphoreHandle_t xLedSemaphore = NULL;
+SemaphoreHandle_t xLedMutex = NULL;
 
 /*Tasks Handles*/
 BaseType_t xReturned;
@@ -227,46 +227,41 @@ void smooth_color_transition_blocking(uint8_t r,uint8_t g,uint8_t b, uint16_t ti
 /*routine to set a color change from mqtt or http*/
 void led_task_set_connecting(void *pvParameter){
     led_strip_config_t *ptr_led_config;
-    uint32_t xNotification;
     ptr_led_config = (led_strip_config_t *)pvParameter;
 
-    while(1){
+
+    for( ;; ){
         xEventGroupWaitBits(eGLed_task_set_connecting,
                             EG_CONNECTING_START_BIT,
                             pdTRUE,
                             pdTRUE,
                             portMAX_DELAY);
-        smooth_color_transition_blocking(
-            ptr_led_config->channel[LEDC_R].hex_val,
-            ptr_led_config->channel[LEDC_G].hex_val,
-            ptr_led_config->channel[LEDC_B].hex_val,
-            1000);
-        // xNotification = ulTaskNotifyTake(pdTRUE, 1000 / portTICK_PERIOD_MS );
-        vTaskDelay(500);
-        if( 0 ){
-            /* If notification arrives cancel operation and delete task */
-            set_color(0,0,0,0);
-            vTaskDelete(NULL);
+        while( (get_system_state() == STATE_WIFI_CONNECTING) || (get_system_state() == STATE_AP_STARTED) ){
+            xSemaphoreTake(xLedMutex,portMAX_DELAY);
+            smooth_color_transition_blocking(
+                ptr_led_config->channel[LEDC_R].hex_val,
+                ptr_led_config->channel[LEDC_G].hex_val,
+                ptr_led_config->channel[LEDC_B].hex_val,
+                1000);
+            xSemaphoreGive(xLedMutex);
+            vTaskDelay(500);
+            if( 0 ){
+                /* If notification arrives cancel operation and delete task */
+                xSemaphoreTake(xLedMutex,portMAX_DELAY);
+                set_color(0,0,0,0);
+                xSemaphoreGive(xLedMutex);
+                vTaskDelete(NULL);
+            }
+            else{
+                /*if not continue wit the program execution*/
+                xSemaphoreTake(xLedMutex,portMAX_DELAY);
+                smooth_color_transition_blocking(0,0,0,200);
+                xSemaphoreGive(xLedMutex);
+            }
         }
-        else{
-            /*if not continue wit the program execution*/
-            smooth_color_transition_blocking(0,0,0,200);
-        }
-        
     }
-    
-
 }
 
-/*routine to set a color change from mqtt or http*/
-void led_task_set_config(void *pvParameter){
-    led_strip_config_t *ptr_led_config;
-    ptr_led_config = (led_strip_config_t *)pvParameter;
-    while(1){
-
-    }
-    vTaskDelete(NULL);
-}
 
 
 /*routine to set a color change from mqtt or http*/
@@ -280,11 +275,13 @@ void led_task_set_static(void *pvParameter){
             pdTRUE,
             pdTRUE,
             portMAX_DELAY);
+        xSemaphoreTake(xLedMutex,portMAX_DELAY);
         smooth_color_transition(
             ptr_led_config->channel[LEDC_R].hex_val,
             ptr_led_config->channel[LEDC_G].hex_val,
             ptr_led_config->channel[LEDC_B].hex_val,
             500);
+        xSemaphoreGive(xLedMutex);
     }
 }
 
@@ -302,8 +299,8 @@ inline led_fade_params_t get_step_rate(uint32_t start, uint32_t end, uint32_t fa
     if(step_rate == 0){
         direction = NOT_D;
     }
-    ESP_LOGW(TAG,"start=%d end=%d steps=%d direction=%d steps_per_tick=%f step_rate=%f",
-        start,end,steps,direction,steps_per_tick,step_rate);
+    // ESP_LOGW(TAG,"start=%d end=%d steps=%d direction=%d steps_per_tick=%f step_rate=%f",
+    //     start,end,steps,direction,steps_per_tick,step_rate);
     ret.direction = direction;
     ret.step_rate = step_rate;
     return ret;
@@ -370,7 +367,9 @@ void led_task_set_fade(void *pvParameter){
             /*Red channel*/
             if((countflag_red >= r_params.step_rate) && (!r_flag) && (r_flag == false)){
                 (r_params.direction) ? start_red++ : start_red--;
+                xSemaphoreTake(xLedMutex,portMAX_DELAY);
                 set_duty_chan(gamma12[start_red],LEDC_R);
+                xSemaphoreGive(xLedMutex);
                 countflag_red = 0;
                 if(start_red == end_red){
                     r_flag = true;
@@ -379,7 +378,9 @@ void led_task_set_fade(void *pvParameter){
             /* Green channel*/
             if((countflag_green >= g_params.step_rate) && (!g_flag) && (g_flag == false)){
                 (g_params.direction) ? start_green++ : start_green--;
+                xSemaphoreTake(xLedMutex,portMAX_DELAY);
                 set_duty_chan(gamma12[start_green],LEDC_G);
+                xSemaphoreGive(xLedMutex);
                 countflag_green = 0;
                 if(start_green == end_green){
                     g_flag = true;
@@ -388,7 +389,9 @@ void led_task_set_fade(void *pvParameter){
             /*Blue channel*/
             if((countflag_blue >= b_params.step_rate) && (!b_flag) && (b_flag == false)){
                 (b_params.direction) ? start_blue++ : start_blue--;
+                xSemaphoreTake(xLedMutex,portMAX_DELAY);
                 set_duty_chan(gamma12[start_blue],LEDC_B);
+                xSemaphoreGive(xLedMutex);
                 countflag_blue = 0;
                 if(start_blue == end_blue){
                     b_flag = true;
@@ -457,6 +460,8 @@ void change_mode(led_strip_config_t *rgb_config){
 void led_control_init()
 {   
     int ch;
+
+    xLedMutex = xSemaphoreCreateMutex();
     set_system_state(STATE_RGB_STARTING);
 
     /* event groups creation*/
