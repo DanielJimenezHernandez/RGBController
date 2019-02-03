@@ -31,6 +31,11 @@ typedef struct{
     led_channel_config_t channel[LEDC_CH_NUM];
 }led_strip_config_t;
 
+typedef struct {
+    uint8_t direction;
+    double step_rate;
+}led_fade_params_t;
+
 
 void led_control_init();
 void change_mode(led_strip_config_t *rgb_config);

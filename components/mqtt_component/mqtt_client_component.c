@@ -109,7 +109,7 @@ static void mqtt_app_start(void)
 {
     /*TODO: get config of the broker address*/
     esp_mqtt_client_config_t mqtt_cfg = {
-        .uri = "http://192.168.2.2",
+        .uri = "http://192.168.1.88",
         .event_handle = mqtt_event_handler,
         .transport = MQTT_TRANSPORT_OVER_TCP
         // .user_context = (void *)your_context

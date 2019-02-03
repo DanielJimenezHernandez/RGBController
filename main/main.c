@@ -51,7 +51,7 @@ void callback(State st){
             led_config_s.channel[LEDC_B].hex_val = 88;
             led_config_s.mode = LED_MODE_CONNECTING_TO_AP;
 
-            change_mode(&led_config_s);
+            //change_mode(&led_config_s);
             break;
         case STATE_WIFI_CONNECTED:
             ESP_LOGI("Main App", "Wifi Connected to station");
@@ -70,7 +70,7 @@ void callback(State st){
         case STATE_RGB_STARTING:
             break;
         case STATE_RGB_STARTED:
-            wifi_config_init();
+            wifi_component_init();
             break;
         case STATE_UNDEFINED:
             break;
