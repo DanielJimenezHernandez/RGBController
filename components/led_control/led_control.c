@@ -1,31 +1,18 @@
-
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "freertos/semphr.h"
 
 #include "driver/ledc.h"
 #include "esp_err.h"
 #include "esp_log.h"
+
+#include "statemachine.h"
+
 #include "led_control.h"
 #include "gamma.h"
 
-const uint8_t gamma8[] = {
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
-    1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
-    2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
-    5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
-   10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
-   17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
-   25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
-   37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
-   51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
-   69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
-   90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
-  115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
-  144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
-  177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
-  215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
 
 #define LEDC_HS_TIMER          LEDC_TIMER_0
 #define LEDC_HS_MODE           LEDC_HIGH_SPEED_MODE
@@ -35,26 +22,54 @@ const uint8_t gamma8[] = {
 #define LEDC_HS_G_CHANNEL      LEDC_CHANNEL_1
 #define LEDC_HS_B_GPIO         (19)
 #define LEDC_HS_B_CHANNEL      LEDC_CHANNEL_2
-#define TIMER_DUTY_RES         LEDC_TIMER_13_BIT
+#define TIMER_DUTY_RES         LEDC_TIMER_12_BIT
+
+#define UP_D    1
+#define DOWN_D  0
+#define NOT_D   2
+
+/*Debug String*/
+static const char *TAG = "Led Control";
+
+/*semaphore for accesing the led peripheral*/
+SemaphoreHandle_t xLedSemaphore = NULL;
+
+/*Tasks Handles*/
+BaseType_t xReturned;
+TaskHandle_t xHled_task_set_connecting;
+TaskHandle_t xHled_task_set_fade;
+TaskHandle_t xHled_task_set_static;
+
+/*Config Structures for the tasks*/
+led_strip_config_t rgb_config_fade;
+led_strip_config_t rgb_config_static;
+led_strip_config_t rgb_config_connecting;
+
+/*Bits for the event groups*/
+
+#define EG_FADE_START_BIT           BIT0
+#define EG_FADE_CANCEL_BIT          BIT1
+
+#define EG_CONNECTING_START_BIT     BIT0
+
+#define EG_STATIC_START_BIT         BIT0
+
+/*Event Groups*/
+EventGroupHandle_t eGLed_task_set_connecting;
+EventGroupHandle_t eGLed_task_set_fade;
+EventGroupHandle_t eGLed_task_set_static;
+
+led_strip_config_t global_led_state;
 
 
-
-
-static EventGroupHandle_t s_ledc_event_group;
-
-bool cancel_fade = false;
-
-static led_strip_config_t global_led_state;
-
-static const char *TAG = "Led_Control";
-
+/*Configuration structures*/
 /*
     * Prepare and set configuration of timers
     * that will be used by LED Controller
     */
 ledc_timer_config_t ledc_timer = {
     .duty_resolution = TIMER_DUTY_RES, // resolution of PWM duty
-    .freq_hz = 5000,                      // frequency of PWM signal
+    .freq_hz = 240,                      // frequency of PWM signal
     .speed_mode = LEDC_HS_MODE,           // timer mode
     .timer_num = LEDC_HS_TIMER            // timer index
 };
@@ -105,8 +120,8 @@ led_strip_config_t get_led_state(){
     return global_led_state;
 }
 
-uint8_t gamma_correction(uint8_t color){
-    return gamma8[color];
+uint32_t gamma_correction(uint32_t duty){
+    return gamma12[duty];
 }
 
 
@@ -143,9 +158,9 @@ void set_color(uint8_t r,uint8_t g,uint8_t b, bool gamma){
 
     if (gamma){
         /* convert color to duty with gamma correction*/
-        r_duty = hex2duty(gamma_correction(r));
-        g_duty = hex2duty(gamma_correction(g));
-        b_duty = hex2duty(gamma_correction(b));   
+        r_duty = gamma_correction(hex2duty(r));
+        g_duty = gamma_correction(hex2duty(g));
+        b_duty = gamma_correction(hex2duty(b));   
     }
     else{
         /* convert color to duty*/
@@ -159,16 +174,16 @@ void set_color(uint8_t r,uint8_t g,uint8_t b, bool gamma){
 }
 
 /*Function using hardware fade, only to give a smooth transition between change of color in mode static*/
-void smooth_color_transition(uint8_t r,uint8_t g,uint8_t b){
+void smooth_color_transition(uint8_t r,uint8_t g,uint8_t b, uint16_t time_ms){
 
     /* convert color to duty*/
-    uint32_t r_duty = hex2duty(gamma_correction(r));
-    uint32_t g_duty = hex2duty(gamma_correction(g));
-    uint32_t b_duty = hex2duty(gamma_correction(b));
+    uint32_t r_duty = gamma_correction(hex2duty(r));
+    uint32_t g_duty = gamma_correction(hex2duty(g));
+    uint32_t b_duty = gamma_correction(hex2duty(b));
 
-    ledc_set_fade_with_time(ledc_channel[LEDC_R].speed_mode, ledc_channel[LEDC_R].channel,r_duty,500);
-    ledc_set_fade_with_time(ledc_channel[LEDC_G].speed_mode, ledc_channel[LEDC_G].channel,g_duty,500);
-    ledc_set_fade_with_time(ledc_channel[LEDC_B].speed_mode, ledc_channel[LEDC_B].channel,b_duty,500);
+    ledc_set_fade_with_time(ledc_channel[LEDC_R].speed_mode, ledc_channel[LEDC_R].channel,r_duty,time_ms);
+    ledc_set_fade_with_time(ledc_channel[LEDC_G].speed_mode, ledc_channel[LEDC_G].channel,g_duty,time_ms);
+    ledc_set_fade_with_time(ledc_channel[LEDC_B].speed_mode, ledc_channel[LEDC_B].channel,b_duty,time_ms);
 
     ledc_fade_start(ledc_channel[LEDC_R].speed_mode,ledc_channel[LEDC_R].channel, LEDC_FADE_NO_WAIT);
     ledc_fade_start(ledc_channel[LEDC_G].speed_mode,ledc_channel[LEDC_G].channel, LEDC_FADE_NO_WAIT);
@@ -185,123 +200,243 @@ void smooth_color_transition(uint8_t r,uint8_t g,uint8_t b){
 
 }
 
+void smooth_color_transition_blocking(uint8_t r,uint8_t g,uint8_t b, uint16_t time_ms){
+    /* convert color to duty*/
+    uint32_t r_duty = gamma_correction(hex2duty(r));
+    uint32_t g_duty = gamma_correction(hex2duty(g));
+    uint32_t b_duty = gamma_correction(hex2duty(b));
+
+    ledc_set_fade_with_time(ledc_channel[LEDC_R].speed_mode, ledc_channel[LEDC_R].channel,r_duty,time_ms);
+    ledc_set_fade_with_time(ledc_channel[LEDC_G].speed_mode, ledc_channel[LEDC_G].channel,g_duty,time_ms);
+    ledc_set_fade_with_time(ledc_channel[LEDC_B].speed_mode, ledc_channel[LEDC_B].channel,b_duty,time_ms);
+
+    ledc_fade_start(ledc_channel[LEDC_R].speed_mode,ledc_channel[LEDC_R].channel, LEDC_FADE_NO_WAIT);
+    ledc_fade_start(ledc_channel[LEDC_G].speed_mode,ledc_channel[LEDC_G].channel, LEDC_FADE_NO_WAIT);
+    ledc_fade_start(ledc_channel[LEDC_B].speed_mode,ledc_channel[LEDC_B].channel, LEDC_FADE_WAIT_DONE);
+
+    global_led_state.channel[LEDC_R].duty = r_duty;
+    global_led_state.channel[LEDC_R].hex_val = r;
+
+    global_led_state.channel[LEDC_G].duty = g_duty;
+    global_led_state.channel[LEDC_G].hex_val = g;
+
+    global_led_state.channel[LEDC_B].duty = b_duty;
+    global_led_state.channel[LEDC_B].hex_val = b;  
+}
+
+/*routine to set a color change from mqtt or http*/
+void led_task_set_connecting(void *pvParameter){
+    led_strip_config_t *ptr_led_config;
+    uint32_t xNotification;
+    ptr_led_config = (led_strip_config_t *)pvParameter;
+
+    while(1){
+        xEventGroupWaitBits(eGLed_task_set_connecting,
+                            EG_CONNECTING_START_BIT,
+                            pdTRUE,
+                            pdTRUE,
+                            portMAX_DELAY);
+        smooth_color_transition_blocking(
+            ptr_led_config->channel[LEDC_R].hex_val,
+            ptr_led_config->channel[LEDC_G].hex_val,
+            ptr_led_config->channel[LEDC_B].hex_val,
+            1000);
+        // xNotification = ulTaskNotifyTake(pdTRUE, 1000 / portTICK_PERIOD_MS );
+        vTaskDelay(500);
+        if( 0 ){
+            /* If notification arrives cancel operation and delete task */
+            set_color(0,0,0,0);
+            vTaskDelete(NULL);
+        }
+        else{
+            /*if not continue wit the program execution*/
+            smooth_color_transition_blocking(0,0,0,200);
+        }
+        
+    }
+    
+
+}
+
+/*routine to set a color change from mqtt or http*/
+void led_task_set_config(void *pvParameter){
+    led_strip_config_t *ptr_led_config;
+    ptr_led_config = (led_strip_config_t *)pvParameter;
+    while(1){
+
+    }
+    vTaskDelete(NULL);
+}
+
+
 /*routine to set a color change from mqtt or http*/
 void led_task_set_static(void *pvParameter){
     led_strip_config_t *ptr_led_config;
     ptr_led_config = (led_strip_config_t *)pvParameter;
     while(1){
+        xEventGroupWaitBits(
+            eGLed_task_set_static,
+            EG_STATIC_START_BIT,
+            pdTRUE,
+            pdTRUE,
+            portMAX_DELAY);
         smooth_color_transition(
             ptr_led_config->channel[LEDC_R].hex_val,
             ptr_led_config->channel[LEDC_G].hex_val,
-            ptr_led_config->channel[LEDC_B].hex_val);
-        vTaskDelete(NULL);
+            ptr_led_config->channel[LEDC_B].hex_val,
+            500);
     }
+}
 
+/*Helper function to calculate step rate*/
+
+inline led_fade_params_t get_step_rate(uint32_t start, uint32_t end, uint32_t fade_time){
+    led_fade_params_t ret;
+    uint32_t steps = abs(start-end);
+    /* 1 = up 0 = down 2 = dont change*/
+    uint8_t direction = (start > end) ? DOWN_D : UP_D;
+    /*steps per ms*/
+    double steps_per_tick = (fade_time != 0) ? (double)steps/fade_time : 0;
+    /*amount of steps per tick*/
+    double step_rate = (steps_per_tick != 0) ? 1/steps_per_tick : 0;
+    if(step_rate == 0){
+        direction = NOT_D;
+    }
+    ESP_LOGW(TAG,"start=%d end=%d steps=%d direction=%d steps_per_tick=%f step_rate=%f",
+        start,end,steps,direction,steps_per_tick,step_rate);
+    ret.direction = direction;
+    ret.step_rate = step_rate;
+    return ret;
 }
 
 void led_task_set_fade(void *pvParameter){
-    bool r_flag = false;
-    bool g_flag = false;
-    bool b_flag = false;
+    ESP_LOGI(TAG,"led_task_set_fade started");
+    /*Pointer to the led config structure (Needs to be filled before unblock)*/
+    led_strip_config_t *ptr_led_config = (led_strip_config_t *)pvParameter;
+    /*Flags to indicate end of color fade*/
+    bool r_flag;
+    bool g_flag;
+    bool b_flag;
+    EventBits_t cancel_flag = 0;
+    led_fade_params_t r_params, g_params, b_params;
+    uint32_t start_red,end_red,start_green,end_green,start_blue,end_blue,fadetime_ms;
+    portTickType countflag_red,countflag_green,countflag_blue;
+    
+    
+    for ( ;; ){
+        ESP_LOGI(TAG,"[led_task_set_fade] Waiting for signal...");
+        xEventGroupWaitBits(eGLed_task_set_fade,
+                            EG_FADE_START_BIT,
+                            pdFALSE,
+                            pdTRUE,
+                            portMAX_DELAY);
+        r_flag = false;
+        g_flag = false;
+        b_flag = false;
+        
+        cancel_flag = xEventGroupGetBits(eGLed_task_set_fade) & EG_FADE_CANCEL_BIT;
 
-    led_strip_config_t *ptr_led_config;
-    ptr_led_config = (led_strip_config_t *)pvParameter;
+        fadetime_ms = ptr_led_config->fadetime_s * 1000;
 
-    uint32_t fadetime_ms = ptr_led_config->fadetime_s * 1000;
-    /*calculate steps (in duty) required for fade time*/
-    /*steps for r*/
-    uint32_t start_red = hex2duty(global_led_state.channel[LEDC_R].hex_val);
-    uint32_t end_red = hex2duty(ptr_led_config->channel[LEDC_R].hex_val);
-    uint32_t steps_red = abs(start_red-end_red);
-    uint8_t direction_red = (start_red > end_red) ? 0 : 1;
-    /*steps per ms*/
-    double step_per_tick_red = (steps_red != 0) ? (double)steps_red/(double)fadetime_ms : 0;
-    /*amount of steps per tick*/
-    double step_rate_red = 1/step_per_tick_red;
+        start_red = hex2duty(global_led_state.channel[LEDC_R].hex_val);
+        end_red = hex2duty(ptr_led_config->channel[LEDC_R].hex_val);
+        r_params = get_step_rate(start_red,end_red,fadetime_ms);
 
-    uint32_t start_green = hex2duty(global_led_state.channel[LEDC_G].hex_val);
-    uint32_t end_green = hex2duty(ptr_led_config->channel[LEDC_G].hex_val);
-    uint32_t steps_green = abs(start_green-end_green);
-    uint8_t direction_green = (start_green > end_green) ? 0 : 1;
-    /*steps per ms*/
-    double step_per_tick_green = (steps_green != 0) ? (double)steps_green/(double)fadetime_ms : 0;
-    /*amount of steps per tick*/
-    double step_rate_green = 1/step_per_tick_green;
+        start_green = hex2duty(global_led_state.channel[LEDC_G].hex_val);
+        end_green = hex2duty(ptr_led_config->channel[LEDC_G].hex_val);
+        g_params = get_step_rate(start_green,end_green,fadetime_ms);
 
-    uint32_t start_blue = hex2duty(global_led_state.channel[LEDC_B].hex_val);
-    uint32_t end_blue = hex2duty(ptr_led_config->channel[LEDC_B].hex_val);
-    uint32_t steps_blue = abs(start_blue-end_blue);
-    uint8_t direction_blue = (start_blue > end_blue) ? 0 : 1;
-    /*steps per ms*/
-    double step_per_tick_blue = (steps_blue != 0) ? (double)steps_blue/(double)fadetime_ms : 0;
-    /*amount of steps per tick*/
-    double step_rate_blue = 1/step_per_tick_blue;
+        start_blue = hex2duty(global_led_state.channel[LEDC_B].hex_val);
+        end_blue = hex2duty(ptr_led_config->channel[LEDC_B].hex_val);
+        b_params = get_step_rate(start_blue,end_blue,fadetime_ms);
 
-    ESP_LOGI(TAG,"fadetime_ms = %d",fadetime_ms);
-
-
-    ESP_LOGI(TAG,"increase 1 step every %.10f",step_rate_red);
-
-    ESP_LOGI(TAG,"\nstart_red[%d]\nend_red[%d]\nsteps_to_red[%d]\ndirection_red[%d]\nsteps_per_tick[%.10f]",
-        start_red,end_red,steps_red,direction_red,step_per_tick_red);
-
-    portTickType countflag_red = 0, countflag_green = 0, countflag_blue = 0;
-    portTickType xTimeBefore, xTotalTimeSuspended;
-    xTimeBefore = xTaskGetTickCount();
-    while( (!r_flag || !g_flag || !b_flag) && !cancel_fade){
-        /*Red channel*/
-        if((countflag_red >= step_rate_red) && !r_flag){
-            (direction_red) ? start_red++ : start_red--;
-            set_duty_chan(gamma[start_red],LEDC_R);
-            countflag_red = 0;
-            if(start_red == end_red){
-                r_flag = true;
-            }
+        if (r_params.direction == NOT_D){
+            r_flag = true;
         }
-        /* Green channel*/
-        if((countflag_green >= step_rate_green) && !g_flag){
-            (direction_green) ? start_green++ : start_green--;
-            set_duty_chan(gamma[start_green],LEDC_G);
-            countflag_green = 0;
-            if(start_green == end_green){
-                g_flag = true;
-            }
+
+        if (g_params.direction == NOT_D){
+            g_flag = true;
         }
-        /*Blue channel*/
-        if((countflag_blue >= step_rate_blue) && !b_flag){
-            (direction_blue) ? start_blue++ : start_blue--;
-            set_duty_chan(gamma[start_blue],LEDC_B);
-            countflag_blue = 0;
-            if(start_blue == end_blue){
-                b_flag = true;
-            }
+
+        if (b_params.direction == NOT_D){
+            b_flag = true;
         }
-        countflag_red++;
-        countflag_green++;
-        countflag_blue++;
-        vTaskDelay(1);
+
+        countflag_red = 0, countflag_green = 0, countflag_blue = 0;
+        portTickType xTimeBefore, xTotalTime;
+
+        xTimeBefore = xTaskGetTickCount();
+        while( (!r_flag || !g_flag || !b_flag) && (!cancel_flag) ){
+            /*Red channel*/
+            if((countflag_red >= r_params.step_rate) && (!r_flag) && (r_flag == false)){
+                (r_params.direction) ? start_red++ : start_red--;
+                set_duty_chan(gamma12[start_red],LEDC_R);
+                countflag_red = 0;
+                if(start_red == end_red){
+                    r_flag = true;
+                }
+            }
+            /* Green channel*/
+            if((countflag_green >= g_params.step_rate) && (!g_flag) && (g_flag == false)){
+                (g_params.direction) ? start_green++ : start_green--;
+                set_duty_chan(gamma12[start_green],LEDC_G);
+                countflag_green = 0;
+                if(start_green == end_green){
+                    g_flag = true;
+                }
+            }
+            /*Blue channel*/
+            if((countflag_blue >= b_params.step_rate) && (!b_flag) && (b_flag == false)){
+                (b_params.direction) ? start_blue++ : start_blue--;
+                set_duty_chan(gamma12[start_blue],LEDC_B);
+                countflag_blue = 0;
+                if(start_blue == end_blue){
+                    b_flag = true;
+                }
+            }
+
+            countflag_red++;
+            countflag_green++;
+            countflag_blue++;
+            cancel_flag = xEventGroupGetBits(eGLed_task_set_fade) & EG_FADE_CANCEL_BIT;
+            vTaskDelay(1);
+        }
+        xTotalTime = xTaskGetTickCount() - xTimeBefore;
+        xEventGroupClearBits(eGLed_task_set_fade,EG_FADE_CANCEL_BIT);
+        xEventGroupClearBits(eGLed_task_set_fade,EG_FADE_START_BIT);
+        ESP_LOGI(TAG,"Fade Task Done in %d ticks",xTotalTime);
     }
-    xTotalTimeSuspended = xTaskGetTickCount() - xTimeBefore;
-    ESP_LOGI(TAG,"Fade Task Done in %d ticks",xTotalTimeSuspended);
-    cancel_fade = false;
-    vTaskDelete(NULL);
+
 }
 
 /*This function starts tasks with routines fot the leds*/
 void change_mode(led_strip_config_t *rgb_config){
+    
+    if(xEventGroupGetBits(eGLed_task_set_fade) && EG_FADE_START_BIT){
+        xEventGroupSetBits(eGLed_task_set_fade,EG_FADE_CANCEL_BIT);
+    }
     switch(rgb_config->mode){
         case LED_MODE_CONNECTING_TO_AP:
+            /*Notify the task to start*/
+            memcpy(&rgb_config_connecting, rgb_config, sizeof(led_strip_config_t));
+            xEventGroupSetBits(eGLed_task_set_connecting,
+                                EG_CONNECTING_START_BIT);
             break;
         case LED_MODE_READY_FOR_CONFIG:
             break;
         case LED_MODE_STATIC:
-            cancel_fade = true;
+            /*Notify the task to start*/
+            memcpy(&rgb_config_static, rgb_config, sizeof(led_strip_config_t));
+            xEventGroupSetBits(eGLed_task_set_static,
+                                EG_STATIC_START_BIT);
             ESP_LOGI(TAG, "LED_MODE_STATIC");
-            xTaskCreate(&led_task_set_static, "led_task_set_static", 2048, rgb_config, 5, NULL);
             break;
         case LED_MODE_FADE:
+            /*Notify the task to start*/
+            memcpy(&rgb_config_fade, rgb_config, sizeof(led_strip_config_t));
             ESP_LOGI(TAG, "LED_MODE_FADE");
-            xTaskCreate(&led_task_set_fade, "led_task_set_fade", 2048, rgb_config, 5, NULL);
+            xEventGroupSetBits(eGLed_task_set_fade,
+                                EG_FADE_START_BIT);
             break;
         case LED_MODE_RANDOM_FADE:
             break;
@@ -312,6 +447,7 @@ void change_mode(led_strip_config_t *rgb_config){
         case LED_MODE_STROBE:
             break;
         case LED_MODE_STOPPED:
+            smooth_color_transition(0,0,0,10);
             break;
     }
 }
@@ -319,18 +455,55 @@ void change_mode(led_strip_config_t *rgb_config){
 
 
 void led_control_init()
-{
+{   
     int ch;
+    set_system_state(STATE_RGB_STARTING);
+
+    /* event groups creation*/
+    eGLed_task_set_connecting   = xEventGroupCreate();
+    eGLed_task_set_fade         = xEventGroupCreate();
+    eGLed_task_set_static       = xEventGroupCreate();
     
     global_led_state.mode = LED_MODE_STOPPED;
-    // Set configuration of timer0 for high speed channels
+    /* Set configuration of timer0 for high speed channels */
     ledc_timer_config(&ledc_timer);
 
-    // Set LED Controller with previously prepared configuration
+    /* Set LED Controller with previously prepared configuration*/ 
     for (ch = 0; ch < LEDC_CH_NUM; ch++) {
         ledc_channel_config(&ledc_channel[ch]);
     }
 
-    // Initialize fade service for smooth transition.
+    /* Initialize fade service for smooth transition.*/
     ledc_fade_func_install(0);
+
+    /*Create Tasks*/
+
+    xReturned = xTaskCreate(&led_task_set_fade,
+                            "led_task_set_fade",
+                            2048, &rgb_config_fade,
+                            5,
+                            xHled_task_set_fade);
+    if(xReturned != pdPASS){
+        ESP_LOGE(TAG,"Unable to create [led_task_set_fade] task");
+    }
+    xReturned = xTaskCreate(&led_task_set_static,
+                            "led_task_set_static",
+                            2048,
+                            &rgb_config_static,
+                            5,
+                            xHled_task_set_static);
+    if(xReturned != pdPASS){
+        ESP_LOGE(TAG,"Unable to create [led_task_set_static] task");
+    }
+    xReturned = xTaskCreate(&led_task_set_connecting,
+                            "led_task_set_connecting",
+                            2048,
+                            &rgb_config_connecting,
+                            5,
+                            xHled_task_set_connecting);
+    if(xReturned != pdPASS){
+        ESP_LOGE(TAG,"Unable to create [led_task_set_static] task");
+    }
+
+    set_system_state(STATE_RGB_STARTED);
 }

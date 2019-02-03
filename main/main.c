@@ -41,8 +41,17 @@ led_strip_config_t led_config_s;
 void callback(State st){
     switch(st){
         case STATE_INIT:
+            led_control_init();
             break;
         case STATE_WIFI_CONNECTING:
+            ESP_LOGI("Main App", "Setting mode to LED_MODE_CONNECTING_TO_AP");
+            /*Colors for the config mode*/
+            led_config_s.channel[LEDC_R].hex_val = 35;
+            led_config_s.channel[LEDC_G].hex_val = 67;
+            led_config_s.channel[LEDC_B].hex_val = 88;
+            led_config_s.mode = LED_MODE_CONNECTING_TO_AP;
+
+            //change_mode(&led_config_s);
             break;
         case STATE_WIFI_CONNECTED:
             ESP_LOGI("Main App", "Wifi Connected to station");
@@ -55,10 +64,13 @@ void callback(State st){
             break;
         case STATE_MQTT_CONNECTED:
             ESP_LOGI("Main App", "MQTT Connected and ready to receive messages");
+            led_config_s.mode = LED_MODE_STOPPED;
+            change_mode(&led_config_s);
             break;
         case STATE_RGB_STARTING:
             break;
         case STATE_RGB_STARTED:
+            wifi_component_init();
             break;
         case STATE_UNDEFINED:
             break;
@@ -136,6 +148,9 @@ mqtt_subscribers mqtt_configs={
     };
 
 void app_main(){
+    /* Initialization of state machine*/
+    init_sm(&callback);
+    set_system_state(STATE_UNDEFINED);
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -143,20 +158,16 @@ void app_main(){
       ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+    /* Set state machine to init*/
+    set_system_state(STATE_INIT);
 
 
     /*Helper function to fill topics*/
     for(uint8_t i = 0; i < NUMBER_OF_SUBSCRIBERS; i++){
         constructTopic(&mqtt_configs[i]);
     }
-
+    
+    /*Set mqtt configs and callbacks the actual init will be done in state machine*/
     mqtt_set_config(&mqtt_configs);
-
-    ESP_LOGI("Main App", "ESP_WIFI_MODE_AP");
-    init_sm(&callback);
-    wifi_config_init();
-    led_control_init();
-
-
     
 }

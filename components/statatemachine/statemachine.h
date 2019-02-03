@@ -15,7 +15,7 @@ typedef enum state {
 typedef void (*sm_event_cb_t)(State state);
 State systemState;
 
-
+char *state2str(State state);
 void init_sm(sm_event_cb_t cb);
 void set_system_state(State state);
 State get_system_state();
