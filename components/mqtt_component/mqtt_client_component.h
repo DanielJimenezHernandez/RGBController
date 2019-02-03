@@ -1,13 +1,15 @@
 #ifndef MQTT_CLIENT_COMPONENT_H
 #define MQTT_CLIENT_COMPONENT_H
 
+#include "mqtt_client.h"
+
 #define DEFAULT_BROKER CONFIG_MQTT_DEF_BROKER
 #define NUMBER_OF_SUBSCRIBERS CONFIG_MQTT_SUBSCRIBERS
 #define BASE_TOPIC_MAX_LEN 64
 #define SUB_TOPIC_MAX_LEN 32
 #define FULL_TOPIC_MAX_LEN (BASE_TOPIC_MAX_LEN + SUB_TOPIC_MAX_LEN)
 
-typedef void (*mqtt_callback_t)(char *payload);
+typedef void (*mqtt_callback_t)(esp_mqtt_event_handle_t event);
 
 typedef struct {
     char base_topic[BASE_TOPIC_MAX_LEN];

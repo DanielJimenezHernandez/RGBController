@@ -31,10 +31,12 @@
 
 #define TOPIC_1 "set_static"
 #define TOPIC_2 "set_fade"
-#define TOPIC_3 "set_static"
+#define TOPIC_3 "set_random"
+
+uint16_t globalFadeTime = 60 * 5;
 
 
-sLed_state led_config_s;
+led_strip_config_t led_config_s;
 
 void callback(State st){
     switch(st){
@@ -66,8 +68,9 @@ void callback(State st){
     }
 }
 
-void callback_set_static(char *data){
-    cJSON *root = cJSON_Parse(data);
+void callback_set_static(esp_mqtt_event_handle_t event){
+    /* TODO: Sanity check before parsing needed*/
+    cJSON *root = cJSON_Parse(event->data);
     cJSON *format = cJSON_GetObjectItem(root,"colors");
     int red = cJSON_GetObjectItem(format,"red")->valueint;
     int green = cJSON_GetObjectItem(format,"green")->valueint;
@@ -76,31 +79,38 @@ void callback_set_static(char *data){
     cJSON_Delete(root);
 
     led_config_s.mode = LED_MODE_STATIC;
-    led_config_s.r.hex_val = red;
-    led_config_s.g.hex_val = green;
-    led_config_s.b.hex_val = blue;
+    led_config_s.channel[LEDC_R].hex_val = red;
+    led_config_s.channel[LEDC_G].hex_val = green;
+    led_config_s.channel[LEDC_B].hex_val = blue;
     change_mode(&led_config_s);
 }
 
-void callback_set_fade(char *data){
-    cJSON *root = cJSON_Parse(data);
+void callback_set_fade(esp_mqtt_event_handle_t event){
+    /*TODO: Sanity Check Before parsing needed*/
+    cJSON *root = cJSON_Parse(event->data);
     cJSON *format = cJSON_GetObjectItem(root,"colors");
     int red = cJSON_GetObjectItem(format,"red")->valueint;
     int green = cJSON_GetObjectItem(format,"green")->valueint;
     int blue = cJSON_GetObjectItem(format,"blue")->valueint;
-    ESP_LOGI("Main App", "Got Colors r[%d]g[%d]b[%d]",red,green,blue);
+    int fade_time = cJSON_GetObjectItem(format,"time")->valueint;
+    ESP_LOGI("Main App", "Got Colors r[%d]g[%d]b[%d] fadetime[%d]",red,green,blue,fade_time);
     cJSON_Delete(root);
 
     led_config_s.mode = LED_MODE_FADE;
-    led_config_s.r.hex_val = red;
-    led_config_s.g.hex_val = green;
-    led_config_s.b.hex_val = blue;
+    led_config_s.channel[LEDC_R].hex_val = red;
+    led_config_s.channel[LEDC_G].hex_val = green;
+    led_config_s.channel[LEDC_B].hex_val = blue;
+    led_config_s.fadetime_s = fade_time;
     change_mode(&led_config_s);
+}
+
+void callback_set_random(esp_mqtt_event_handle_t event){
+    ESP_LOGI("Main App", "Random Set");
 }
 
 mqtt_subscribers mqtt_configs={
     {
-        .base_topic = "/RGBController/",
+        .base_topic = BASE_TOPIC,
         .base_t_len = sizeof(BASE_TOPIC),
         .sub_topic = TOPIC_1,
         .sub_t_len = sizeof(TOPIC_1),
@@ -108,7 +118,7 @@ mqtt_subscribers mqtt_configs={
         .callback = &callback_set_static
     },
     {
-        .base_topic = "/RGBController/",
+        .base_topic = BASE_TOPIC,
         .base_t_len = sizeof(BASE_TOPIC),
         .sub_topic = TOPIC_2,
         .sub_t_len = sizeof(TOPIC_2),
@@ -116,12 +126,12 @@ mqtt_subscribers mqtt_configs={
         .callback = &callback_set_fade
     },
     {
-        .base_topic = "/RGBController/",
+        .base_topic = BASE_TOPIC,
         .base_t_len = sizeof(BASE_TOPIC),
         .sub_topic = TOPIC_3,
         .sub_t_len = sizeof(TOPIC_3),
         .qos = 0,
-        .callback = &callback_set_static
+        .callback = &callback_set_random
     }
     };
 
@@ -146,6 +156,7 @@ void app_main(){
     init_sm(&callback);
     wifi_config_init();
     led_control_init();
+
 
     
 }
