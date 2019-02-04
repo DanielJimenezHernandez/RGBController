@@ -70,6 +70,7 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
         set_system_state(STATE_WIFI_CONNECTING);
         break;
     case SYSTEM_EVENT_STA_STOP:
+        set_system_state(STATE_AP_STARTED);
         ESP_LOGI(TAG,"SYSTEM_EVENT_STA_STOP");
         wifi_init_ap();
         break;
