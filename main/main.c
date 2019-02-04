@@ -10,20 +10,23 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
-
 #include "esp_log.h"
 #include "nvs_flash.h"
-
 /*Includes from project*/
 #include "wifi.h"
 #include "statemachine.h"
 #include "led_control.h"
 #include "mqtt_client_component.h"
+#include "sntp_component.h"
 
-#include "esp_log.h"
-#include "nvs_flash.h"
+
 
 #include "cJSON.h"
+
+static const char *TAG = "Main";
+
+struct tm system_time;
+char system_time_str[64];
 
 /*Structs for mqtt subscribing topics and configs*/
 
@@ -44,7 +47,7 @@ void callback(State st){
             led_control_init();
             break;
         case STATE_WIFI_CONNECTING:
-            ESP_LOGI("Main App", "Setting mode to LED_MODE_CONNECTING_TO_AP");
+            ESP_LOGI(TAG, "Setting mode to LED_MODE_CONNECTING_TO_AP");
             /*Colors for the config mode*/
             led_config_s.channel[LEDC_R].hex_val = 35;
             led_config_s.channel[LEDC_G].hex_val = 67;
@@ -54,16 +57,17 @@ void callback(State st){
             change_mode(&led_config_s);
             break;
         case STATE_WIFI_CONNECTED:
-            ESP_LOGI("Main App", "Wifi Connected to station");
+            ESP_LOGI(TAG, "Wifi Connected to station");
+            initialize_sntp();
             mqtt_init();
             break;
         case STATE_AP_STARTED:
-            ESP_LOGI("Main App", "ESP_WIFI_MODE_AP");
+            ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
             break;
         case STATE_AP_GOT_CONFIG:
             break;
         case STATE_MQTT_CONNECTED:
-            ESP_LOGI("Main App", "MQTT Connected and ready to receive messages");
+            ESP_LOGI(TAG, "MQTT Connected and ready to receive messages");
             led_config_s.mode = LED_MODE_STOPPED;
             change_mode(&led_config_s);
             break;
@@ -75,7 +79,7 @@ void callback(State st){
         case STATE_UNDEFINED:
             break;
         default:
-            ESP_LOGI("Main App", "Unhandled Event");
+            ESP_LOGI(TAG, "Unhandled Event");
             break;
     }
 }
@@ -87,7 +91,7 @@ void callback_set_static(esp_mqtt_event_handle_t event){
     int red = cJSON_GetObjectItem(format,"red")->valueint;
     int green = cJSON_GetObjectItem(format,"green")->valueint;
     int blue = cJSON_GetObjectItem(format,"blue")->valueint;
-    ESP_LOGI("Main App", "Got Colors r[%d]g[%d]b[%d]",red,green,blue);
+    ESP_LOGI(TAG, "Got Colors r[%d]g[%d]b[%d]",red,green,blue);
     cJSON_Delete(root);
 
     led_config_s.mode = LED_MODE_STATIC;
@@ -105,7 +109,7 @@ void callback_set_fade(esp_mqtt_event_handle_t event){
     int green = cJSON_GetObjectItem(format,"green")->valueint;
     int blue = cJSON_GetObjectItem(format,"blue")->valueint;
     int fade_time = cJSON_GetObjectItem(format,"time")->valueint;
-    ESP_LOGI("Main App", "Got Colors r[%d]g[%d]b[%d] fadetime[%d]",red,green,blue,fade_time);
+    ESP_LOGI(TAG, "Got Colors r[%d]g[%d]b[%d] fadetime[%d]",red,green,blue,fade_time);
     cJSON_Delete(root);
 
     led_config_s.mode = LED_MODE_FADE;
@@ -117,7 +121,7 @@ void callback_set_fade(esp_mqtt_event_handle_t event){
 }
 
 void callback_set_random(esp_mqtt_event_handle_t event){
-    ESP_LOGI("Main App", "Random Set");
+    ESP_LOGI(TAG, "Random Set");
 }
 
 mqtt_subscribers mqtt_configs={
@@ -149,6 +153,7 @@ mqtt_subscribers mqtt_configs={
 
 void app_main(){
     /* Initialization of state machine*/
+    time_set_flag = false;
     init_sm(&callback);
     set_system_state(STATE_UNDEFINED);
     //Initialize NVS
@@ -169,5 +174,16 @@ void app_main(){
     
     /*Set mqtt configs and callbacks the actual init will be done in state machine*/
     mqtt_set_config(&mqtt_configs);
+
+    while(1){
+        while(!time_set_flag){
+            ESP_LOGI(TAG, "Time Not Set Yet");
+            vTaskDelay(1000 / portTICK_PERIOD_MS );
+        }
+        get_system_time(&system_time);
+        strftime(system_time_str, sizeof(system_time_str), "%c", &system_time);
+        ESP_LOGI(TAG, "%s", system_time_str);
+        vTaskDelay(1000 / portTICK_PERIOD_MS );
+    }
     
 }
