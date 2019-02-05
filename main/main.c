@@ -18,6 +18,7 @@
 #include "led_control.h"
 #include "mqtt_client_component.h"
 #include "sntp_component.h"
+#include "http_component.h"
 
 
 
@@ -58,6 +59,7 @@ void callback(State st){
             break;
         case STATE_WIFI_CONNECTED:
             ESP_LOGI(TAG, "Wifi Connected to station");
+            start_webserver();
             initialize_sntp();
             mqtt_init();
             break;
