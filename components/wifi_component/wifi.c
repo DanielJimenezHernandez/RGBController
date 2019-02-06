@@ -34,10 +34,10 @@ static EventGroupHandle_t s_wifi_event_group;
 #define STA_MAX_RETRIES       CONFIG_RGB_CONTROLLER_MAX_RETRIES
 
 /*HARDCODED STUFF MUST REMOVE*/
-// #define HARDCODED_SSID        "LaFinK"
-// #define HARDCODED_PASSWD      "Lagertha123"
-#define HARDCODED_SSID        "INFINITUM8652_2.4"
-#define HARDCODED_PASSWD      "oEaUtLiKCr"
+#define HARDCODED_SSID        "LaFinK"
+#define HARDCODED_PASSWD      "Lagertha123"
+// #define HARDCODED_SSID        "INFINITUM8652_2.4"
+// #define HARDCODED_PASSWD      "oEaUtLiKCr"
   
 
 /* Struct to control wifi configs*/
