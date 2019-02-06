@@ -19,6 +19,7 @@
 #include "mqtt_client_component.h"
 #include "sntp_component.h"
 #include "http_component.h"
+#include "mdns_component.h"
 
 
 
@@ -59,8 +60,9 @@ void callback(State st){
             break;
         case STATE_WIFI_CONNECTED:
             ESP_LOGI(TAG, "Wifi Connected to station");
-            start_webserver();
             initialize_sntp();
+            start_webserver();
+            initialise_mdns();
             mqtt_init();
             break;
         case STATE_AP_STARTED:
@@ -180,12 +182,12 @@ void app_main(){
     while(1){
         while(!time_set_flag){
             ESP_LOGI(TAG, "Time Not Set Yet");
-            vTaskDelay(1000 / portTICK_PERIOD_MS );
+            vTaskDelay(5000 / portTICK_PERIOD_MS );
         }
         get_system_time(&system_time);
         strftime(system_time_str, sizeof(system_time_str), "%c", &system_time);
         ESP_LOGI(TAG, "%s", system_time_str);
-        vTaskDelay(1000 / portTICK_PERIOD_MS );
+        vTaskDelay(5000 / portTICK_PERIOD_MS );
     }
     
 }

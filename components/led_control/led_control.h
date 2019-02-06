@@ -39,5 +39,8 @@ typedef struct {
 
 void led_control_init();
 void change_mode(led_strip_config_t *rgb_config);
+char *jsonify_colors(void);
+
+led_strip_config_t get_led_state();
 
 #endif /* LED_CONTROL_H */

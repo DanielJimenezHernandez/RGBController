@@ -7,10 +7,12 @@
 #include "driver/ledc.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "cJSON.h"
 
 #include "statemachine.h"
 
 #include "led_control.h"
+
 #include "gamma.h"
 
 
@@ -115,6 +117,27 @@ ledc_channel_config_t ledc_channel[LEDC_CH_NUM] = {
         .timer_sel  = LEDC_HS_TIMER
     },
 };
+
+//create a monitor with a list of supported resolutions
+//NOTE: Returns a heap allocated string, you are required to free it after use.
+char* jsonify_colors(void)
+{
+    char *string = NULL;
+
+    cJSON *root;
+    cJSON *color;
+
+    root=cJSON_CreateObject();	
+	cJSON_AddItemToObject(root, "colors", color=cJSON_CreateObject());
+    cJSON_AddNumberToObject(color,"red",	global_led_state.channel[LEDC_R].hex_val);
+    cJSON_AddNumberToObject(color,"green",	global_led_state.channel[LEDC_G].hex_val);
+    cJSON_AddNumberToObject(color,"blue",	global_led_state.channel[LEDC_B].hex_val);
+
+    string = cJSON_PrintUnformatted(root);
+
+    cJSON_Delete(root);
+    return string;
+}
 
 led_strip_config_t get_led_state(){
     return global_led_state;
