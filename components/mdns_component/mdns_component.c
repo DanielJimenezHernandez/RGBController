@@ -43,21 +43,19 @@ void initialise_mdns(void){
     ESP_ERROR_CHECK( mdns_init() );
     //set mDNS hostname (required if you want to advertise services)
     ESP_ERROR_CHECK( mdns_hostname_set(hostname) );
-    ESP_LOGI(TAG, "mdns hostname set to: [%s]", hostname);
     //set default mDNS instance name
+    ESP_LOGI(TAG, "mdns hostname set to: [%s]", hostname);
     ESP_ERROR_CHECK( mdns_instance_name_set(CONFIG_MDNS_INSTANCE) );
 
     //structure with TXT records
     mdns_txt_item_t serviceTxtData[1] = {
-        {"board","esp32"},
-        // {"u","user"},
-        // {"p","password"}
+        {"version","1.0.0"},
     };
 
     //initialize service
-    ESP_ERROR_CHECK( mdns_service_add("RGBLights", "_http", "_tcp", 8080, serviceTxtData, 1) );
+    ESP_ERROR_CHECK( mdns_service_add("RGBLightsRestful", "_http", "_tcp", 80, serviceTxtData, 1) );
     //add another TXT item
-    ESP_ERROR_CHECK( mdns_service_txt_item_set("_http", "_tcp", "path", "/hello") );
+    ESP_ERROR_CHECK( mdns_service_txt_item_set("_http", "_tcp", "path", "/api") );
     //change TXT item value
-    ESP_ERROR_CHECK( mdns_service_txt_item_set("_http", "_tcp", "u", "admin") );
+
 }

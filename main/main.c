@@ -12,6 +12,7 @@
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "cJSON.h"
 /*Includes from project*/
 #include "wifi.h"
 #include "statemachine.h"
@@ -21,9 +22,7 @@
 #include "http_component.h"
 #include "mdns_component.h"
 
-
-
-#include "cJSON.h"
+#include "global.h"
 
 static const char *TAG = "Main";
 
@@ -66,9 +65,18 @@ void callback(State st){
             mqtt_init();
             break;
         case STATE_AP_STARTED:
-            ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
+            ESP_LOGI(TAG, "ESP_WIFI_MODE_AP ");
+            /*Colors for the config mode*/
+            led_config_s.channel[LEDC_R].hex_val = 5;
+            led_config_s.channel[LEDC_G].hex_val = 61;
+            led_config_s.channel[LEDC_B].hex_val = 15;
+            led_config_s.mode = LED_MODE_CONNECTING_TO_AP;
+            change_mode(&led_config_s);
+            start_webserver();
             break;
         case STATE_AP_GOT_CONFIG:
+            ESP_LOGI(TAG, "STATE_AP_GOT_CONFIG try to connect to new ap");
+            wifi_init_sta_new(&global_ssid[0],&global_passwd[0]);
             break;
         case STATE_MQTT_CONNECTED:
             ESP_LOGI(TAG, "MQTT Connected and ready to receive messages");
@@ -179,15 +187,15 @@ void app_main(){
     /*Set mqtt configs and callbacks the actual init will be done in state machine*/
     mqtt_set_config(&mqtt_configs);
 
-    while(1){
-        while(!time_set_flag){
-            ESP_LOGI(TAG, "Time Not Set Yet");
-            vTaskDelay(5000 / portTICK_PERIOD_MS );
-        }
-        get_system_time(&system_time);
-        strftime(system_time_str, sizeof(system_time_str), "%c", &system_time);
-        ESP_LOGI(TAG, "%s", system_time_str);
-        vTaskDelay(5000 / portTICK_PERIOD_MS );
-    }
+    // while(1){
+    //     while(!time_set_flag){
+    //         ESP_LOGI(TAG, "Time Not Set Yet");
+    //         vTaskDelay(5000 / portTICK_PERIOD_MS );
+    //     }
+    //     get_system_time(&system_time);
+    //     strftime(system_time_str, sizeof(system_time_str), "%c", &system_time);
+    //     ESP_LOGI(TAG, "%s", system_time_str);
+    //     vTaskDelay(5000 / portTICK_PERIOD_MS );
+    // }
     
 }

@@ -53,6 +53,7 @@ led_strip_config_t rgb_config_connecting;
 #define EG_FADE_CANCEL_BIT          BIT1
 
 #define EG_CONNECTING_START_BIT     BIT0
+#define EG_AP_STARTED_BIT
 
 #define EG_STATIC_START_BIT         BIT0
 
@@ -254,12 +255,39 @@ void led_task_set_connecting(void *pvParameter){
 
 
     for( ;; ){
+
         xEventGroupWaitBits(eGLed_task_set_connecting,
                             EG_CONNECTING_START_BIT,
                             pdTRUE,
                             pdTRUE,
                             portMAX_DELAY);
-        while( (get_system_state() == STATE_WIFI_CONNECTING) || (get_system_state() == STATE_AP_STARTED) ){
+        /*Routine for sta connecting */
+        while( (get_system_state() == STATE_WIFI_CONNECTING) ){
+            xSemaphoreTake(xLedMutex,portMAX_DELAY);
+            smooth_color_transition_blocking(
+                ptr_led_config->channel[LEDC_R].hex_val,
+                ptr_led_config->channel[LEDC_G].hex_val,
+                ptr_led_config->channel[LEDC_B].hex_val,
+                1000);
+            xSemaphoreGive(xLedMutex);
+            vTaskDelay(500);
+            if( 0 ){
+                /* If notification arrives cancel operation and delete task */
+                xSemaphoreTake(xLedMutex,portMAX_DELAY);
+                set_color(0,0,0,0);
+                xSemaphoreGive(xLedMutex);
+                vTaskDelete(NULL);
+            }
+            else{
+                /*if not continue wit the program execution*/
+                xSemaphoreTake(xLedMutex,portMAX_DELAY);
+                smooth_color_transition_blocking(0,0,0,200);
+                xSemaphoreGive(xLedMutex);
+            }
+        }
+        
+        /*Routine for ap started */
+        while( (get_system_state() == STATE_AP_STARTED) ){
             xSemaphoreTake(xLedMutex,portMAX_DELAY);
             smooth_color_transition_blocking(
                 ptr_led_config->channel[LEDC_R].hex_val,
