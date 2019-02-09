@@ -107,14 +107,25 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 
 static void mqtt_app_start(void)
 {
+#ifdef CONFIG_MQTT_EXTERNAL_BROKER
     /*TODO: get config of the broker address*/
     esp_mqtt_client_config_t mqtt_cfg = {
-        .uri = "http://192.168.2.2",
+        .uri = CONFIG_MQTT_DEF_BROKER,
         .event_handle = mqtt_event_handler,
-        .transport = MQTT_TRANSPORT_OVER_TCP
+        .transport = MQTT_TRANSPORT_OVER_TCP,
+        .username = CONFIG_MQTT_BROKER_USERNAME,
+        .password = CONFIG_MQTT_BROKER_PASSWD,
+        .port = CONFIG_MQTT_PORT
         // .user_context = (void *)your_context
     };
-
+#else
+    esp_mqtt_client_config_t mqtt_cfg = {
+        .uri = CONFIG_MQTT_DEF_BROKER,
+        .event_handle = mqtt_event_handler,
+        .transport = MQTT_TRANSPORT_OVER_TCP,
+        // .user_context = (void *)your_context
+    };  
+#endif
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     esp_mqtt_client_start(client);
 }

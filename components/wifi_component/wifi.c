@@ -34,15 +34,15 @@ static EventGroupHandle_t s_wifi_event_group;
 #define STA_MAX_RETRIES       CONFIG_RGB_CONTROLLER_MAX_RETRIES
 
 /*HARDCODED STUFF MUST REMOVE*/
-#define HARDCODED_SSID        "LaFinK"
-#define HARDCODED_PASSWD      "Lagertha123"
-// #define HARDCODED_SSID        "INFINITUM8652_2.4"
-// #define HARDCODED_PASSWD      "oEaUtLiKCr"
+// #define HARDCODED_SSID        "LaFinK"
+// #define HARDCODED_PASSWD      "Lagertha123"
+#define HARDCODED_SSID        "INFINITUM8652_2.4"
+#define HARDCODED_PASSWD      "oEaUtLiKCr"
   
 
 /* Struct to control wifi configs*/
 wifi_config_t wifi_config;
-const static int AP_CONNECTED_BIT = BIT0;
+const static int AP_SHUTDOWN_BIT = BIT0;
 const static int AP_GOT_CONFIG_BIT = BIT1;
 const static int STA_CONNECTED_BIT = BIT2;
 const static int STA_TIMEOUT = BIT3;
@@ -64,23 +64,36 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
     esp_err_t err;
 
     switch(event->event_id) {
+    case SYSTEM_EVENT_AP_STOP:
+        ESP_LOGI(TAG,"SYSTEM_EVENT_AP_STOP");
+        xEventGroupSetBits(s_wifi_event_group, AP_GOT_CONFIG_BIT);
+        break;
+    case SYSTEM_EVENT_AP_START:
+        ESP_LOGI(TAG,"SYSTEM_EVENT_AP_START");
+        set_system_state(STATE_AP_STARTED);
+        break;
     case SYSTEM_EVENT_STA_START:
         ESP_LOGI(TAG,"SYSTEM_EVENT_STA_START");
         esp_wifi_connect();
         set_system_state(STATE_WIFI_CONNECTING);
         break;
     case SYSTEM_EVENT_STA_STOP:
-        set_system_state(STATE_AP_STARTED);
-        ESP_LOGI(TAG,"SYSTEM_EVENT_STA_STOP");
-        wifi_init_ap();
+        /* Workaround while fixing why am i getting SYSTEM_EVENT_STA_STOP whe stopping in AP_MODE? */
+        if (xEventGroupGetBits(s_wifi_event_group) & AP_GOT_CONFIG_BIT){
+            xEventGroupClearBits(s_wifi_event_group,AP_GOT_CONFIG_BIT);
+            xEventGroupSetBits(s_wifi_event_group, AP_SHUTDOWN_BIT);
+        }else{
+            ESP_LOGI(TAG,"SYSTEM_EVENT_STA_STOP");
+            wifi_init_ap();
+        }
         break;
     case SYSTEM_EVENT_STA_GOT_IP:
-        set_system_state(STATE_WIFI_CONNECTED);
         ESP_LOGI(TAG,"SYSTEM_EVENT_STA_GOT_IP");
         ESP_LOGI(TAG, "got ip:%s",
                  ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, STA_CONNECTED_BIT);
+        set_system_state(STATE_WIFI_CONNECTED);
         break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
         {
@@ -110,35 +123,46 @@ void wifi_init_sta(){
 
     tcpip_adapter_init();
     ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL) );
-
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = HARDCODED_SSID,
-            .password = HARDCODED_PASSWD
-        },
-    };
+    wifi_config_t wifi_config, starting_wifi_config;
+    memset(&wifi_config,0,sizeof(wifi_config));
+    esp_wifi_get_config(ESP_IF_WIFI_STA, &starting_wifi_config);
+    /* check if nvs config */
+    if(starting_wifi_config.sta.ssid[0] != 0){
+        ESP_LOGI(TAG, "Start Config Found...");
+        memcpy(&wifi_config.sta.ssid[0],
+            &starting_wifi_config.sta.ssid[0],
+            sizeof(wifi_config.sta.ssid));
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
-    ESP_ERROR_CHECK(esp_wifi_start());
+        memcpy(&wifi_config.sta.password[0],
+            &starting_wifi_config.sta.password[0],
+            sizeof(wifi_config.sta.password));
+        ESP_LOGI(TAG, "Connecting with creds [%s] [%s]",wifi_config.sta.ssid,wifi_config.sta.password);
+        
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
+        ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
+        ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "wifi_init_sta finished.");
-    ESP_LOGI(TAG, "connect to ap SSID:%s password:%s",
-             HARDCODED_SSID, HARDCODED_PASSWD);
+        ESP_LOGI(TAG, "wifi_init_sta finished.");
+    }
+    else{
+        /* Directly ented config mode */
+        wifi_init_ap();
+    }
+
 }
 
 void wifi_init_ap(){
-    wifi_config_t wifi_config = {
-        .ap = {
-            .ssid = AP_ESP_WIFI_SSID,
-            .ssid_len = strlen(AP_ESP_WIFI_SSID),
-            .password = AP_ESP_WIFI_PASS,
-            .max_connection = AP_MAX_STA_CONN,
-            .authmode = WIFI_AUTH_WPA_WPA2_PSK
-        },
-    };
+
+    wifi_config_t wifi_config;
+    memset(&wifi_config,0,sizeof(wifi_config));
+    strcpy((char *)&wifi_config.ap.ssid[0],AP_ESP_WIFI_SSID);
+    strcpy((char *)&wifi_config.ap.password[0],AP_ESP_WIFI_PASS);
+    wifi_config.ap.ssid_len = strlen(AP_ESP_WIFI_SSID);
+    wifi_config.ap.max_connection = AP_MAX_STA_CONN;
+    wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &wifi_config) );
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -160,6 +184,48 @@ void wifi_component_init()
     
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
+}
+
+void wifi_init_sta_new(char *ssid, char *passw){
+    int ssid_len,passwd_len;
+    wifi_config_t wifi_config;
+    s_retry_num = 0;
+    wifi_mode_t mode;
+    memset(&wifi_config,0,sizeof(wifi_config));
+    xEventGroupSetBits(s_wifi_event_group, AP_GOT_CONFIG_BIT);
+    esp_wifi_get_mode(&mode);
+    ESP_LOGI(TAG,"wifi_init_sta_new - Mode before stop %d",mode);
+    esp_err_t err = esp_wifi_stop();
+    ESP_LOGI(TAG,"wifi_init_sta_new - esp_wifi_stop() err = %d",err);
+    
+    /*wait for stop of the interface to make changes*/
+    xEventGroupWaitBits(s_wifi_event_group,
+                       AP_SHUTDOWN_BIT,
+                       true,
+                       true,
+                       portMAX_DELAY);
+    ssid_len = strlen(ssid);
+    passwd_len = strlen(passw);
+
+    if(ssid_len <= sizeof(wifi_config.sta.ssid)){
+        memcpy(wifi_config.sta.ssid, ssid, ssid_len);
+        wifi_config.sta.ssid[ssid_len] = '\0';
+    }
+
+    if(passwd_len <= sizeof(wifi_config.sta.password)){
+        memcpy(wifi_config.sta.password, passw, passwd_len);
+        wifi_config.sta.password[passwd_len] = '\0';
+    }
+    ESP_LOGI(TAG, "Tring to connect with SSID:%s password:%s",
+             wifi_config.sta.ssid, wifi_config.sta.password);
+
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
+    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_LOGI(TAG, "wifi_init_sta_new finished.");
+
 }
 
 
