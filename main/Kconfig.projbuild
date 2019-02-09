@@ -60,12 +60,38 @@ menu "Project Specific Configuration"
                 help
                 Default broker address to try on first connect the default port is 1883
 
+            config MQTT_EXTERNAL_BROKER
+                bool "Enable configs for an external connection"
+                help
+                    use this if you are trying to connect to an external broker secured by
+                    username, password and a custom port
+
+            config MQTT_BROKER_USERNAME
+                string "Broker Username"
+                depends on MQTT_EXTERNAL_BROKER
+                default "testUser"
+                help
+                Username to be used
+
+            config MQTT_BROKER_PASSWD
+                string "Broker passwd"
+                depends on MQTT_EXTERNAL_BROKER
+                default ""
+                help
+                password to be used
+
             config MQTT_SUBSCRIBERS
                 int "Number of subscribers"
                 default 3
                 help
                 Number of topics to subscribe. Fill the structure with the correct number of subscribers configured here
-        
+
+            config MQTT_PORT
+                int "MQTT port"
+                depends on MQTT_EXTERNAL_BROKER
+                default 1883
+                help
+                Port to be used in the connection to the broker
         endmenu
 
         menu "MDNS"
