@@ -18,11 +18,11 @@
 
 #define LEDC_HS_TIMER          LEDC_TIMER_0
 #define LEDC_HS_MODE           LEDC_HIGH_SPEED_MODE
-#define LEDC_HS_R_GPIO         (5)
+#define LEDC_HS_R_GPIO         CONFIG_RGB_CONTROLLER_R_Channel
 #define LEDC_HS_R_CHANNEL      LEDC_CHANNEL_0
-#define LEDC_HS_G_GPIO         (18)
+#define LEDC_HS_G_GPIO         CONFIG_RGB_CONTROLLER_G_Channel
 #define LEDC_HS_G_CHANNEL      LEDC_CHANNEL_1
-#define LEDC_HS_B_GPIO         (19)
+#define LEDC_HS_B_GPIO         CONFIG_RGB_CONTROLLER_B_Channel
 #define LEDC_HS_B_CHANNEL      LEDC_CHANNEL_2
 #define TIMER_DUTY_RES         LEDC_TIMER_12_BIT
 
