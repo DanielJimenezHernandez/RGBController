@@ -124,6 +124,7 @@ httpd_handle_t start_webserver(void)
     server_started = true;
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.server_port = CONFIG_HTTP_REST_PORT;
 
     // Start the httpd server
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);

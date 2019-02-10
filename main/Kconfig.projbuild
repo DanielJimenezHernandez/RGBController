@@ -153,6 +153,14 @@ menu "Project Specific Configuration"
 
         endmenu
 
+        menu "HTTP RESTful API"
+            config HTTP_REST_PORT
+                int "Port for http"
+                default 8080
+                help
+                    Port to use in the http restful api setup 
+        endmenu
+
     endmenu
 
 endmenu

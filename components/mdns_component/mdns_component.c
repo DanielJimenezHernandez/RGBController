@@ -48,6 +48,7 @@ void initialise_mdns(const char * device_id){
     ESP_ERROR_CHECK( mdns_instance_name_set(CONFIG_MDNS_INSTANCE) );
 
     //structure with TXT records
+    //TODO: grab CONFIG_DEVICE_DEF_NAME from storage if not set it as default
     mdns_txt_item_t http_api_serviceTxtData[6] = {
         {"path","/api"},
         {"id",device_id},
@@ -58,6 +59,6 @@ void initialise_mdns(const char * device_id){
     };
 
     //initialize service
-    ESP_ERROR_CHECK( mdns_service_add(NULL, "_http", "_tcp", 80, http_api_serviceTxtData, 6) );
+    ESP_ERROR_CHECK( mdns_service_add("RGBLights_"CONFIG_DEVICE_DEF_NAME, "_http", "_tcp", CONFIG_HTTP_REST_PORT, http_api_serviceTxtData, 6) );
 
 }
