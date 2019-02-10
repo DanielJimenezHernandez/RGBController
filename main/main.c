@@ -52,6 +52,40 @@ char system_time_str[64];
 #define FULL_SUB_RANDOM_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_RANDOM
 #define FULL_PUB_RANDOM_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_RANDOM "/" TOPIC_STATE
 
+#define SET_STATIC_INDEX 0
+
+void callback_set_static(esp_mqtt_event_handle_t event);
+void callback_set_fade(esp_mqtt_event_handle_t event);
+void callback_set_random(esp_mqtt_event_handle_t event);
+
+
+mqtt_subscribers mqtt_configs={
+    {
+        .qos = 0,
+        .full_sub_topic = FULL_SUB_STATIC_TOPIC,
+        .full_sub_topic_len = sizeof(FULL_SUB_STATIC_TOPIC),
+        .full_pub_topic = FULL_PUB_STATIC_TOPIC,
+        .full_pub_topic_len = sizeof(FULL_PUB_STATIC_TOPIC),
+        .callback = &callback_set_static
+    },
+    {
+        .qos = 0,
+        .full_sub_topic = FULL_SUB_FADE_TOPIC,
+        .full_sub_topic_len = sizeof(FULL_SUB_FADE_TOPIC),
+        .full_pub_topic = FULL_PUB_FADE_TOPIC,
+        .full_pub_topic_len = sizeof(FULL_PUB_FADE_TOPIC),
+        .callback = &callback_set_fade
+    },
+    {
+        .qos = 0,
+        .full_sub_topic = FULL_SUB_RANDOM_TOPIC,
+        .full_sub_topic_len = sizeof(FULL_SUB_RANDOM_TOPIC),
+        .full_pub_topic = FULL_PUB_RANDOM_TOPIC,
+        .full_pub_topic_len = sizeof(FULL_PUB_RANDOM_TOPIC),
+        .callback = &callback_set_random
+    }
+};
+
 uint16_t globalFadeTime = 60 * 5;
 
 
@@ -99,6 +133,7 @@ void callback(State st){
             ESP_LOGI(TAG, "MQTT Connected and ready to receive messages");
             led_config_s.mode = LED_MODE_STOPPED;
             change_mode(&led_config_s);
+            mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hexify_colors(),1);
             break;
         case STATE_RGB_STARTING:
             break;
@@ -152,34 +187,6 @@ void callback_set_fade(esp_mqtt_event_handle_t event){
 void callback_set_random(esp_mqtt_event_handle_t event){
     ESP_LOGI(TAG, "Random Set");
 }
-
-#define SET_STATIC_INDEX 0
-mqtt_subscribers mqtt_configs={
-    {
-        .qos = 0,
-        .full_sub_topic = FULL_SUB_STATIC_TOPIC,
-        .full_sub_topic_len = sizeof(FULL_SUB_STATIC_TOPIC),
-        .full_pub_topic = FULL_PUB_STATIC_TOPIC,
-        .full_pub_topic_len = sizeof(FULL_PUB_STATIC_TOPIC),
-        .callback = &callback_set_static
-    },
-    {
-        .qos = 0,
-        .full_sub_topic = FULL_SUB_FADE_TOPIC,
-        .full_sub_topic_len = sizeof(FULL_SUB_FADE_TOPIC),
-        .full_pub_topic = FULL_PUB_FADE_TOPIC,
-        .full_pub_topic_len = sizeof(FULL_PUB_FADE_TOPIC),
-        .callback = &callback_set_fade
-    },
-    {
-        .qos = 0,
-        .full_sub_topic = FULL_SUB_RANDOM_TOPIC,
-        .full_sub_topic_len = sizeof(FULL_SUB_RANDOM_TOPIC),
-        .full_pub_topic = FULL_PUB_RANDOM_TOPIC,
-        .full_pub_topic_len = sizeof(FULL_PUB_RANDOM_TOPIC),
-        .callback = &callback_set_random
-    }
-    };
 
 /* Declaration of led tasks done*/
 void set_static_task_done_cb(void){
