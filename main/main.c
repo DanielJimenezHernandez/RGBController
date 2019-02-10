@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "cJSON.h"
+#include "mbedtls/md5.h"
 /*Includes from project*/
 #include "wifi.h"
 #include "statemachine.h"
@@ -24,6 +25,12 @@
 
 #include "global.h"
 #include "i2cdev.h"
+
+/*Device id global variable*/
+/*16 bytes of the md5 digest*/
+unsigned char deviceID[16];
+/*32 bytes of the hex string representation + the null strin terminator*/
+char deviceID_str[33];
 
 /*led finished callbacks*/
 void set_static_task_done_cb(void);
@@ -112,7 +119,7 @@ void callback(State st){
             ESP_LOGI(TAG, "Wifi Connected to station");
             initialize_sntp("UTC-6");
             start_webserver();
-            initialise_mdns();
+            initialise_mdns((const char*)&deviceID_str[0]);
             mqtt_init();
             break;
         case STATE_AP_STARTED:
@@ -195,7 +202,20 @@ void set_static_task_done_cb(void){
 }
 
 void app_main(){
+    /*Generate a unique device id from the device mac address*/
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  
+    mbedtls_md5_ret( (unsigned char *)mac,6,deviceID );
+
+    sprintf(deviceID_str,"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",deviceID[0],
+        deviceID[1],deviceID[2],deviceID[3],deviceID[4],deviceID[5],deviceID[6],deviceID[7],deviceID[8],
+        deviceID[9],deviceID[10],deviceID[11],deviceID[12],deviceID[13],deviceID[14],deviceID[15]);
+
+    ESP_LOGI(TAG,"STA mac address Digest:[%s]",(char *)deviceID_str);
+
     /* Initialization of state machine*/
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
     time_set_flag = false;
     init_sm(&callback);
     set_system_state(STATE_UNDEFINED);

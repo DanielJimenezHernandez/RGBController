@@ -70,7 +70,7 @@ void initialize_sntp(const char *tz)
 #ifdef CONFIG_EXTERNAL_RTC
         struct timeval t;
         time_t externalRTC;
-        struct timezone tz;
+        struct timezone tz  = {0};
         /* Set the local time according to what is configured in the RTC */
         ESP_LOGW(TAG, "Unable to set time time functions getting time from external RTC");
 
@@ -80,8 +80,6 @@ void initialize_sntp(const char *tz)
         
         t.tv_sec = externalRTC;
         t.tv_usec = 0;
-        /* Set the internal RTC time with settimeofday*/
-        tz = {0};
         settimeofday(&t,&tz);
 
 #else
