@@ -23,6 +23,7 @@
 #include "mdns_component.h"
 
 #include "global.h"
+#include "i2cdev.h"
 
 static const char *TAG = "Main";
 
@@ -42,10 +43,12 @@ uint16_t globalFadeTime = 60 * 5;
 
 led_strip_config_t led_config_s;
 
+
 void callback(State st){
     switch(st){
         case STATE_INIT:
             led_control_init();
+            initialize_external_rtc();
             break;
         case STATE_WIFI_CONNECTING:
             ESP_LOGI(TAG, "Setting mode to LED_MODE_CONNECTING_TO_AP");
@@ -59,7 +62,7 @@ void callback(State st){
             break;
         case STATE_WIFI_CONNECTED:
             ESP_LOGI(TAG, "Wifi Connected to station");
-            initialize_sntp();
+            initialize_sntp("UTC-6");
             start_webserver();
             initialise_mdns();
             mqtt_init();
@@ -175,6 +178,14 @@ void app_main(){
       ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+    /* Initialize i2c */
+
+    while (i2cdev_init() != ESP_OK)
+    {
+        printf("Could not init I2Cdev library\n");
+        vTaskDelay(250 / portTICK_PERIOD_MS);
+    }
+
     /* Set state machine to init*/
     set_system_state(STATE_INIT);
 
@@ -186,16 +197,5 @@ void app_main(){
     
     /*Set mqtt configs and callbacks the actual init will be done in state machine*/
     mqtt_set_config(&mqtt_configs);
-
-    // while(1){
-    //     while(!time_set_flag){
-    //         ESP_LOGI(TAG, "Time Not Set Yet");
-    //         vTaskDelay(5000 / portTICK_PERIOD_MS );
-    //     }
-    //     get_system_time(&system_time);
-    //     strftime(system_time_str, sizeof(system_time_str), "%c", &system_time);
-    //     ESP_LOGI(TAG, "%s", system_time_str);
-    //     vTaskDelay(5000 / portTICK_PERIOD_MS );
-    // }
     
 }

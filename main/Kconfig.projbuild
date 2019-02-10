@@ -8,25 +8,25 @@ menu "Project Specific Configuration"
                 string "AP WiFi SSID"
                 default "myssid"
                 help
-                SSID (network name) for the example to connect to.
+                    SSID (network name) for the example to connect to.
 
             config RGB_CONTROLLER_AP_PWD
                 string "AP WiFi Password"
                 default "mypassword"
                 help
-                WiFi password (WPA or WPA2) for the example to use.
+                    WiFi password (WPA or WPA2) for the example to use.
                     
             config RGB_CONTROLLER_MAX_STA_CON
                 int "AP Maximal STA connections"
                 default 4
                 help
-                Max number of the STA connects to AP.
+                    Max number of the STA connects to AP.
 
             config RGB_CONTROLLER_MAX_RETRIES
                 int "AP Maximal Number of retries to the sta"
                 default 5
                 help
-                AP Maximal Number of retries to the STA.
+                    AP Maximal Number of retries to the STA.
 
         endmenu
 
@@ -36,19 +36,19 @@ menu "Project Specific Configuration"
                 int "GPIO For the R channel"
                 default 19
                 help
-                Select the GPIO where to connect the R led strip
+                    Select the GPIO where to connect the R led strip
 
             config RGB_CONTROLLER_G_Channel
                 int "GPIO For the G channel"
                 default 5
                 help
-                Select the GPIO where to connect the G led strip
+                    Select the GPIO where to connect the G led strip
                     
             config RGB_CONTROLLER_B_Channel
                 int "GPIO For the B channel"
                 default 18
                 help
-                Select the GPIO where to connect the B led strip
+                    Select the GPIO where to connect the B led strip
 
         endmenu
 
@@ -58,7 +58,7 @@ menu "Project Specific Configuration"
                 string "Default Broker"
                 default "mqtt://192.168.1.2"
                 help
-                Default broker address to try on first connect the default port is 1883
+                    Default broker address to try on first connect the default port is 1883
 
             config MQTT_EXTERNAL_BROKER
                 bool "Enable configs for an external connection"
@@ -71,27 +71,27 @@ menu "Project Specific Configuration"
                 depends on MQTT_EXTERNAL_BROKER
                 default "testUser"
                 help
-                Username to be used
+                    Username to be used
 
             config MQTT_BROKER_PASSWD
                 string "Broker passwd"
                 depends on MQTT_EXTERNAL_BROKER
                 default ""
                 help
-                password to be used
+                    password to be used
 
             config MQTT_SUBSCRIBERS
                 int "Number of subscribers"
                 default 3
                 help
-                Number of topics to subscribe. Fill the structure with the correct number of subscribers configured here
+                    Number of topics to subscribe. Fill the structure with the correct number of subscribers configured here
 
             config MQTT_PORT
                 int "MQTT port"
                 depends on MQTT_EXTERNAL_BROKER
                 default 1883
                 help
-                Port to be used in the connection to the broker
+                    Port to be used in the connection to the broker
         endmenu
 
         menu "MDNS"
@@ -106,6 +106,38 @@ menu "Project Specific Configuration"
                 default "ESP32 with mDNS"
                 help
                     mDNS Instance Name for example to use
+        endmenu
+
+        menu "I2C"
+
+            config I2CDEV_TIMEOUT
+                int "I2C transaction timeout, milliseconds"
+                default 1000
+                range 100 5000
+
+            config I2C_SDA
+                int "GPIO for I2C SDA"
+                default 16
+                help
+                    Configured GPIO number to use as SDA
+
+            config I2C_SCL
+                int "GPIO for I2C SCL"
+                default 17
+                help
+                    Configured GPIO number to use as SCL 
+
+        endmenu
+
+        menu "External RTC"
+
+            config EXTERNAL_RTC
+                bool "Enable External ds3231 rtc"
+                help
+                    With this option the sntp module will sync with the rtc
+                    to keep time even if the internet conection is down or
+                    the sntp server is unavailable
+
         endmenu
 
     endmenu
