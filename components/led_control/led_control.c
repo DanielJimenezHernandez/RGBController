@@ -30,8 +30,11 @@
 #define DOWN_D  0
 #define NOT_D   2
 
+led_task_done_cb_t led_callbacks[LED_TASKS_NUMBER];
+
 /*Debug String*/
 static const char *TAG = "Led Control";
+char hexyfy_buffer[8];
 
 /*semaphore for accesing the led peripheral*/
 SemaphoreHandle_t xLedMutex = NULL;
@@ -139,6 +142,15 @@ char* jsonify_colors(void)
     cJSON_Delete(root);
     return string;
 }
+
+
+char* hexify_colors(){
+    sprintf(hexyfy_buffer,"#%02x%02x%02x",
+            global_led_state.channel[LEDC_R].hex_val,
+            global_led_state.channel[LEDC_G].hex_val,
+            global_led_state.channel[LEDC_B].hex_val);
+    return &hexyfy_buffer[0];
+} 
 
 led_strip_config_t get_led_state(){
     return global_led_state;
@@ -327,12 +339,15 @@ void led_task_set_static(void *pvParameter){
             pdTRUE,
             portMAX_DELAY);
         xSemaphoreTake(xLedMutex,portMAX_DELAY);
-        smooth_color_transition(
+        smooth_color_transition_blocking(
             ptr_led_config->channel[LEDC_R].hex_val,
             ptr_led_config->channel[LEDC_G].hex_val,
             ptr_led_config->channel[LEDC_B].hex_val,
             500);
         xSemaphoreGive(xLedMutex);
+        if (led_callbacks[LED_MODE_STATIC] != NULL){
+            led_callbacks[LED_MODE_STATIC]();
+        }
     }
 }
 
@@ -506,6 +521,9 @@ void change_mode(led_strip_config_t *rgb_config){
     }
 }
 
+void led_register_done_cb(led_task_done_cb_t cb, eLed_mode mode){
+    led_callbacks[mode] = cb;
+}
 
 
 void led_control_init()

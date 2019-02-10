@@ -25,18 +25,32 @@
 #include "global.h"
 #include "i2cdev.h"
 
+/*led finished callbacks*/
+void set_static_task_done_cb(void);
+
 static const char *TAG = "Main";
 
 struct tm system_time;
 char system_time_str[64];
 
 /*Structs for mqtt subscribing topics and configs*/
+#define DEVICE_NAME CONFIG_DEVICE_DEF_NAME
+#define BASE_TOPIC CONFIG_MQTT_BASE_TOPIC
 
-#define BASE_TOPIC "/RGBController/"
+#define TOPIC_STATE "state"
 
-#define TOPIC_1 "set_static"
-#define TOPIC_2 "set_fade"
-#define TOPIC_3 "set_random"
+#define TOPIC_LED_SET_STATIC  "set_static"
+#define TOPIC_LED_SET_FADE    "set_fade"
+#define TOPIC_LED_SET_RANDOM  "set_random"
+
+#define FULL_SUB_STATIC_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_STATIC
+#define FULL_PUB_STATIC_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_STATIC "/" TOPIC_STATE
+
+#define FULL_SUB_FADE_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_FADE
+#define FULL_PUB_FADE_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_FADE "/" TOPIC_STATE
+
+#define FULL_SUB_RANDOM_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_RANDOM
+#define FULL_PUB_RANDOM_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_RANDOM "/" TOPIC_STATE
 
 uint16_t globalFadeTime = 60 * 5;
 
@@ -139,32 +153,39 @@ void callback_set_random(esp_mqtt_event_handle_t event){
     ESP_LOGI(TAG, "Random Set");
 }
 
+#define SET_STATIC_INDEX 0
 mqtt_subscribers mqtt_configs={
     {
-        .base_topic = BASE_TOPIC,
-        .base_t_len = sizeof(BASE_TOPIC),
-        .sub_topic = TOPIC_1,
-        .sub_t_len = sizeof(TOPIC_1),
         .qos = 0,
+        .full_sub_topic = FULL_SUB_STATIC_TOPIC,
+        .full_sub_topic_len = sizeof(FULL_SUB_STATIC_TOPIC),
+        .full_pub_topic = FULL_PUB_STATIC_TOPIC,
+        .full_pub_topic_len = sizeof(FULL_PUB_STATIC_TOPIC),
         .callback = &callback_set_static
     },
     {
-        .base_topic = BASE_TOPIC,
-        .base_t_len = sizeof(BASE_TOPIC),
-        .sub_topic = TOPIC_2,
-        .sub_t_len = sizeof(TOPIC_2),
         .qos = 0,
+        .full_sub_topic = FULL_SUB_FADE_TOPIC,
+        .full_sub_topic_len = sizeof(FULL_SUB_FADE_TOPIC),
+        .full_pub_topic = FULL_PUB_FADE_TOPIC,
+        .full_pub_topic_len = sizeof(FULL_PUB_FADE_TOPIC),
         .callback = &callback_set_fade
     },
     {
-        .base_topic = BASE_TOPIC,
-        .base_t_len = sizeof(BASE_TOPIC),
-        .sub_topic = TOPIC_3,
-        .sub_t_len = sizeof(TOPIC_3),
         .qos = 0,
+        .full_sub_topic = FULL_SUB_RANDOM_TOPIC,
+        .full_sub_topic_len = sizeof(FULL_SUB_RANDOM_TOPIC),
+        .full_pub_topic = FULL_PUB_RANDOM_TOPIC,
+        .full_pub_topic_len = sizeof(FULL_PUB_RANDOM_TOPIC),
         .callback = &callback_set_random
     }
     };
+
+/* Declaration of led tasks done*/
+void set_static_task_done_cb(void){
+    ESP_LOGW(TAG,"This is the callback of a task done and will publish to %s",mqtt_configs[SET_STATIC_INDEX].full_pub_topic);
+    mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hexify_colors(),1);
+}
 
 void app_main(){
     /* Initialization of state machine*/
@@ -186,15 +207,11 @@ void app_main(){
         vTaskDelay(250 / portTICK_PERIOD_MS);
     }
 
+    /*register all the callbacks for the led tasks to execute when done*/
+    led_register_done_cb(set_static_task_done_cb,LED_MODE_STATIC);
     /* Set state machine to init*/
     set_system_state(STATE_INIT);
-
-
-    /*Helper function to fill topics*/
-    for(uint8_t i = 0; i < NUMBER_OF_SUBSCRIBERS; i++){
-        constructTopic(&mqtt_configs[i]);
-    }
-    
+   
     /*Set mqtt configs and callbacks the actual init will be done in state machine*/
     mqtt_set_config(&mqtt_configs);
     
