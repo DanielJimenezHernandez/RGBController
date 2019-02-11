@@ -161,6 +161,19 @@ menu "Project Specific Configuration"
                     Port to use in the http restful api setup 
         endmenu
 
+        menu "DHT Temperature sensor"
+            config DHT_ENABLE
+                bool "Enable DHT Sensor"
+                help
+                    Self explanatory
+
+            config DHT_GPIO
+                int "GPIO for DHT Temperature sensor"
+                default 23
+                help
+                    Configured GPIO DHT Temperature sensor one wire 
+        endmenu
+
     endmenu
 
 endmenu
