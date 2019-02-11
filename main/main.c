@@ -112,7 +112,7 @@ void callback(State st){
             break;
         case STATE_WIFI_CONNECTED:
             ESP_LOGI(TAG, "Wifi Connected to station");
-            initialize_sntp("UTC-6");
+            initialize_sntp("CST6CDT,M4.1.0,M10.5.0");
             start_webserver();
             initialise_mdns((char*)&_global_configs.deviceID_str_global[0]);
             mqtt_init();
