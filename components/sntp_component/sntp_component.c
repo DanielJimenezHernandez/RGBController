@@ -96,12 +96,6 @@ void initialize_sntp(char *tz)
         time_set_flag = true;
     }
 
-    alarms[1].enable = 1;
-    alarms[1].a_min = 20;
-    alarms[1].a_hour = 22;
-    alarms[1].a_days = SUN;
-
-
     check_alarm_timer = xTimerCreate("check_alarms timer",
                                 1000 / portTICK_PERIOD_MS,
                                 pdTRUE,
