@@ -25,7 +25,7 @@
 
 static const char *TAG = "MQTT component";
 
-mqtt_subscribers *config_ptr;
+mqtt_subscribers_t *config_ptr;
 
 esp_mqtt_client_handle_t client_handle;
 
@@ -122,7 +122,7 @@ void mqtt_init()
     mqtt_app_start();
 }
 
-void mqtt_set_config(mqtt_subscribers *config){
+void mqtt_set_config(mqtt_subscribers_t *config){
     config_ptr = config;
 }
 
