@@ -44,6 +44,7 @@ char system_time_str[64];
 #define TOPIC_LED_SET_STATIC  "set_static"
 #define TOPIC_LED_SET_FADE    "set_fade"
 #define TOPIC_LED_SET_RANDOM  "set_random"
+#define TOPIC_LED_BRIGHTNESS  "brightness"
 
 #define FULL_SUB_STATIC_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_STATIC
 #define FULL_PUB_STATIC_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_STATIC "/" TOPIC_STATE
@@ -54,12 +55,16 @@ char system_time_str[64];
 #define FULL_SUB_RANDOM_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_RANDOM
 #define FULL_PUB_RANDOM_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_SET_RANDOM "/" TOPIC_STATE
 
+#define FULL_SUB_BRIGHTNESS_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_BRIGHTNESS
+#define FULL_PUB_BRIGHTNESS_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_BRIGHTNESS "/" TOPIC_STATE
+
 #define SET_STATIC_INDEX 0
+#define SET_FADE_INDEX 3
 
 void callback_set_static(esp_mqtt_event_handle_t event);
 void callback_set_fade(esp_mqtt_event_handle_t event);
 void callback_set_random(esp_mqtt_event_handle_t event);
-
+void callback_set_bightness(esp_mqtt_event_handle_t event);
 
 mqtt_subscribers_t mqtt_configs={
     {
@@ -85,6 +90,14 @@ mqtt_subscribers_t mqtt_configs={
         .full_pub_topic = FULL_PUB_RANDOM_TOPIC,
         .full_pub_topic_len = sizeof(FULL_PUB_RANDOM_TOPIC),
         .callback = &callback_set_random
+    },
+    {
+        .qos = 0,
+        .full_sub_topic = FULL_SUB_BRIGHTNESS_TOPIC,
+        .full_sub_topic_len = sizeof(FULL_SUB_BRIGHTNESS_TOPIC),
+        .full_pub_topic = FULL_PUB_BRIGHTNESS_TOPIC,
+        .full_pub_topic_len = sizeof(FULL_PUB_BRIGHTNESS_TOPIC),
+        .callback = &callback_set_bightness
     }
 };
 
@@ -103,12 +116,12 @@ void callback(State st){
         case STATE_WIFI_CONNECTING:
             ESP_LOGI(TAG, "Setting mode to LED_MODE_CONNECTING_TO_AP");
             /*Colors for the config mode*/
-            led_config_s.channel[LEDC_R].hex_val = 35;
-            led_config_s.channel[LEDC_G].hex_val = 67;
-            led_config_s.channel[LEDC_B].hex_val = 88;
-            led_config_s.mode = LED_MODE_CONNECTING_TO_AP;
+            // led_config_s.channel[LEDC_R].hex_val = 35;
+            // led_config_s.channel[LEDC_G].hex_val = 67;
+            // led_config_s.channel[LEDC_B].hex_val = 88;
+            // led_config_s.mode = LED_MODE_CONNECTING_TO_AP;
 
-            change_mode(&led_config_s);
+            // change_mode(&led_config_s);
             break;
         case STATE_WIFI_CONNECTED:
             ESP_LOGI(TAG, "Wifi Connected to station");
@@ -120,11 +133,11 @@ void callback(State st){
         case STATE_AP_STARTED:
             ESP_LOGI(TAG, "ESP_WIFI_MODE_AP ");
             /*Colors for the config mode*/
-            led_config_s.channel[LEDC_R].hex_val = 5;
-            led_config_s.channel[LEDC_G].hex_val = 61;
-            led_config_s.channel[LEDC_B].hex_val = 15;
-            led_config_s.mode = LED_MODE_CONNECTING_TO_AP;
-            change_mode(&led_config_s);
+            // led_config_s.channel[LEDC_R].hex_val = 5;
+            // led_config_s.channel[LEDC_G].hex_val = 61;
+            // led_config_s.channel[LEDC_B].hex_val = 15;
+            // led_config_s.mode = LED_MODE_CONNECTING_TO_AP;
+            // change_mode(&led_config_s);
             start_webserver();
             break;
         case STATE_AP_GOT_CONFIG:
@@ -161,9 +174,38 @@ void callback_set_static(esp_mqtt_event_handle_t event){
     cJSON_Delete(root);
 
     led_config_s.mode = LED_MODE_STATIC;
+    led_config_s.brightness = 0;
     led_config_s.channel[LEDC_R].hex_val = red;
     led_config_s.channel[LEDC_G].hex_val = green;
     led_config_s.channel[LEDC_B].hex_val = blue;
+    change_mode(&led_config_s);
+}
+
+#define isspace(c)           (c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v')
+int str2int(int *out, char *s, int base) {
+    char *end;
+    /*STR2INT_INCONVERTIBLE*/
+    if (s[0] == '\0' || isspace(s[0]))
+        return -4;
+    long l = strtol(s, &end, base);
+    if (*end != '\0')
+        return -3;
+    *out = l;
+    return 0;
+}
+void callback_set_bightness(esp_mqtt_event_handle_t event){
+    int brightness;
+    char data[4];
+    memcpy(data,event->data,event->data_len);
+    data[event->data_len] = '\0';
+    str2int(&brightness,data,10);
+    ESP_LOGE(TAG, "Setting brightness to [%d]",brightness);
+    global_brightness = brightness;
+
+
+    led_config_s = get_led_state();
+    led_config_s.mode = LED_MODE_STATIC;
+    led_config_s.brightness = 1;
     change_mode(&led_config_s);
 }
 
@@ -192,8 +234,17 @@ void callback_set_random(esp_mqtt_event_handle_t event){
 
 /* Declaration of led tasks done*/
 void set_static_task_done_cb(void){
-    ESP_LOGW(TAG,"This is the callback of a task done and will publish to %s",mqtt_configs[SET_STATIC_INDEX].full_pub_topic);
+    ESP_LOGI(TAG,"set_static_task_done_cb");
     mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hexify_colors(),1);
+}
+
+/* Declaration of led tasks done*/
+void brightness_task_done_cb(void){
+    ESP_LOGI(TAG,"brightness_task_done_cb");
+    char brightness[4];
+    sprintf(brightness,"%d",global_brightness);
+
+    mqtt_pub(mqtt_configs[SET_FADE_INDEX].full_pub_topic,brightness,1);
 }
 
 void app_main(){
@@ -245,6 +296,7 @@ void app_main(){
 
     /*register all the callbacks for the led tasks to execute when done*/
     led_register_done_cb(set_static_task_done_cb,LED_MODE_STATIC);
+    led_register_done_cb(brightness_task_done_cb,LED_MODE_BRIGHTNESS);
     /* Set state machine to init*/
     set_system_state(STATE_INIT);
    
