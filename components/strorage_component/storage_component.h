@@ -12,6 +12,7 @@ typedef struct  {
     char                device_name_global[16];
 }global_configs_t;
 
+
 global_configs_t _global_configs;
 
 esp_err_t save_global_configs();
