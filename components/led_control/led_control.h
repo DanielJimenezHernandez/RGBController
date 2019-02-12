@@ -7,7 +7,7 @@
 #define LEDC_B             2
 
 /* must match with the eLed_mode enum below*/ 
-#define LED_TASKS_NUMBER 9
+#define LED_TASKS_NUMBER 10
 
 typedef void (*led_task_done_cb_t)(void);
 
@@ -20,7 +20,8 @@ typedef enum led_mode_ {
     LED_MODE_MUSIC,
     LED_MODE_BEAT,
     LED_MODE_STROBE,
-    LED_MODE_STOPPED
+    LED_MODE_STOPPED,
+    LED_MODE_BRIGHTNESS
 }eLed_mode;
 
 typedef struct {
@@ -30,15 +31,18 @@ typedef struct {
 
 typedef struct{
     eLed_mode mode;
-    uint32_t bightness;
+    uint8_t brightness;
     uint16_t fadetime_s;
     led_channel_config_t channel[LEDC_CH_NUM];
+    led_channel_config_t channel_adj[LEDC_CH_NUM];
 }led_strip_config_t;
 
 typedef struct {
     uint8_t direction;
     double step_rate;
 }led_fade_params_t;
+
+uint8_t global_brightness;
 
 
 void led_control_init();
