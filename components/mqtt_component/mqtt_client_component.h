@@ -22,10 +22,10 @@ typedef struct {
     mqtt_callback_t callback;
 } mqtt_component_client_config;
 
-typedef mqtt_component_client_config mqtt_subscribers[NUMBER_OF_SUBSCRIBERS];
+typedef mqtt_component_client_config mqtt_subscribers_t[NUMBER_OF_SUBSCRIBERS];
 
 
-void mqtt_set_config(mqtt_subscribers *config);
+void mqtt_set_config(mqtt_subscribers_t *config);
 void mqtt_init();
 void constructTopic(mqtt_component_client_config *config_struct);
 
