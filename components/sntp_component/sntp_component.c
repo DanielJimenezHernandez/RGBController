@@ -30,21 +30,6 @@ void initialize_external_rtc(){
 
 }
 
-/*Compare returned times*/
-
-void compare_time(struct tm *t1, struct tm *t2){
-    printf("************************************************\n");
-    printf("tm_sec[%d] - tm_sec[%d]\n",t1->tm_sec,t2->tm_sec);
-    printf("tm_min[%d] - tm_min[%d]\n",t1->tm_min,t2->tm_min);
-    printf("tm_hour[%d] - tm_hour[%d]\n",t1->tm_hour,t2->tm_hour);
-    printf("tm_mday[%d] - tm_mday[%d]\n",t1->tm_mday,t2->tm_mday);
-    printf("tm_mon[%d] - tm_mon[%d]\n",t1->tm_mon,t2->tm_mon);
-    printf("tm_year[%d] - tm_year[%d]\n",t1->tm_year,t2->tm_year);
-    printf("tm_wday[%d] - tm_wday[%d]\n",t1->tm_sec,t2->tm_sec);
-    printf("tm_yday[%d] - tm_yday[%d]\n",t1->tm_sec,t2->tm_sec);
-    printf("tm_isdst[%d] - tm_isdst[%d]\n",t1->tm_sec,t2->tm_sec);
-}
-
 void initialize_sntp(const char *tz)
 {
     time_t now = 0;
@@ -101,7 +86,6 @@ void initialize_sntp(const char *tz)
         timeinfo.tm_year += 1900;
         ds3231_set_time(&dev, &timeinfo);
         ds3231_get_time(&dev, &rtc_timeinfo);
-        compare_time(&timeinfo,&rtc_timeinfo);
 
 #endif 
         strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);

@@ -21,6 +21,8 @@
 #include <netdb.h>
 
 #include "mdns_component.h"
+#include "storage_component.h"
+char device_name[16];
 
 
 static const char c_config_hostname[] = CONFIG_MDNS_HOSTNAME;
@@ -29,7 +31,7 @@ static const char c_config_hostname[] = CONFIG_MDNS_HOSTNAME;
 static const char *TAG = "mdns-test";
 
 
-void initialise_mdns(const char * device_id){
+void initialise_mdns(char * device_id){
     _Static_assert(sizeof(c_config_hostname) < CONFIG_MAIN_TASK_STACK_SIZE/2, "Configured mDNS name consumes more than half of the stack. Please select a shorter host name or extend the main stack size please.");
     const size_t config_hostname_len = sizeof(c_config_hostname) - 1; // without term char
     char hostname[config_hostname_len + 1 + 3*2 + 1]; // adding underscore + 3 digits + term char
@@ -46,6 +48,13 @@ void initialise_mdns(const char * device_id){
     //set default mDNS instance name
     ESP_LOGI(TAG, "mdns hostname set to: [%s]", hostname);
     ESP_ERROR_CHECK( mdns_instance_name_set(CONFIG_MDNS_INSTANCE) );
+    
+    if(_global_configs.device_name_global[0] == 0){
+        sprintf(device_name,"%s",CONFIG_DEVICE_DEF_NAME);
+    }
+    else{
+        sprintf(device_name,"%s",&_global_configs.device_name_global[0]);
+    }
 
     //structure with TXT records
     //TODO: grab CONFIG_DEVICE_DEF_NAME from storage if not set it as default
@@ -54,11 +63,11 @@ void initialise_mdns(const char * device_id){
         {"id",device_id},
         {"version","1.0.0"},
         {"mqtt_en","true"},
-        {"mqtt_dev_name",CONFIG_DEVICE_DEF_NAME},
+        {"mqtt_dev_name",device_name},
         {"mqtt_fmt","json"}
     };
 
     //initialize service
-    ESP_ERROR_CHECK( mdns_service_add("RGBLights_"CONFIG_DEVICE_DEF_NAME, "_http", "_tcp", CONFIG_HTTP_REST_PORT, http_api_serviceTxtData, 6) );
+    ESP_ERROR_CHECK( mdns_service_add(hostname, "_http", "_tcp", CONFIG_HTTP_REST_PORT, http_api_serviceTxtData, 6) );
 
 }
