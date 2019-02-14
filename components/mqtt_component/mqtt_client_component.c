@@ -60,8 +60,10 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
             break;
         case MQTT_EVENT_DATA:
             ESP_LOGI(TAG, "MQTT_EVENT_DATA");
+            char topic[128];
+            snprintf(topic,event->topic_len + 1,"%s",event->topic);
             for (uint8_t i = 0; i < NUMBER_OF_SUBSCRIBERS; i++){
-                int ret = memcmp((*config_ptr)[i].full_sub_topic,event->topic,event->topic_len);
+                int ret = strcmp((*config_ptr)[i].full_sub_topic,topic);
                 if(ret == 0){
                     ESP_LOGI(TAG,"Topic = %s",(*config_ptr)[i].full_sub_topic);
                     if((*config_ptr)[i].callback != NULL){

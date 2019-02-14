@@ -58,13 +58,20 @@ char system_time_str[64];
 #define FULL_SUB_BRIGHTNESS_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_BRIGHTNESS
 #define FULL_PUB_BRIGHTNESS_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_BRIGHTNESS "/" TOPIC_STATE
 
+#define FULL_SUB_STATE_TOPIC BASE_TOPIC "/" DEVICE_NAME 
+#define FULL_PUB_STATE_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_STATE
+
 #define SET_STATIC_INDEX 0
-#define SET_FADE_INDEX 3
+#define SET_FADE_INDEX 1
+#define SET_RANDOM_INDEX 2
+#define SET_BRIGHTNESS_INDEX 3
+#define SET_STATE_INDEX 4
 
 void callback_set_static(esp_mqtt_event_handle_t event);
 void callback_set_fade(esp_mqtt_event_handle_t event);
 void callback_set_random(esp_mqtt_event_handle_t event);
 void callback_set_bightness(esp_mqtt_event_handle_t event);
+void callback_set_state(esp_mqtt_event_handle_t event);
 
 mqtt_subscribers_t mqtt_configs={
     {
@@ -98,13 +105,21 @@ mqtt_subscribers_t mqtt_configs={
         .full_pub_topic = FULL_PUB_BRIGHTNESS_TOPIC,
         .full_pub_topic_len = sizeof(FULL_PUB_BRIGHTNESS_TOPIC),
         .callback = &callback_set_bightness
+    },
+    {
+        .qos = 0,
+        .full_sub_topic = FULL_SUB_STATE_TOPIC,
+        .full_sub_topic_len = sizeof(FULL_SUB_STATE_TOPIC),
+        .full_pub_topic = FULL_PUB_STATE_TOPIC,
+        .full_pub_topic_len = sizeof(FULL_PUB_STATE_TOPIC),
+        .callback = &callback_set_state
     }
 };
 
 uint16_t globalFadeTime = 60 * 5;
 
 
-led_strip_config_t led_config_s;
+sLedStripConfig_t led_config_s;
 
 
 void callback(State st){
@@ -148,7 +163,7 @@ void callback(State st){
             ESP_LOGI(TAG, "MQTT Connected and ready to receive messages");
             led_config_s.mode = LED_MODE_STOPPED;
             change_mode(&led_config_s);
-            mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hexify_colors(),1);
+            mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hass_colors(),0);
             break;
         case STATE_RGB_STARTING:
             break;
@@ -161,6 +176,38 @@ void callback(State st){
             ESP_LOGI(TAG, "Unhandled Event");
             break;
     }
+}
+
+void callback_set_state(esp_mqtt_event_handle_t event){
+    char data[4];
+    memcpy(data,event->data,event->data_len);
+    //ESP_LOGW(TAG,"HERE IT IS");
+    sLedStripConfig_t current_led_state;
+    current_led_state = get_led_state();
+    data[event->data_len] = '\0';
+    if(strcmp(data,"ON") == 0){
+        if(!current_led_state.channel[LEDC_R].hex_val && !current_led_state.channel[LEDC_G].hex_val && !current_led_state.channel[LEDC_B].hex_val){
+
+            led_config_s.mode = LED_MODE_STATIC;
+            led_config_s.brightness = 0;
+            led_config_s.channel[LEDC_R].hex_val = 255;
+            led_config_s.channel[LEDC_G].hex_val = 255;
+            led_config_s.channel[LEDC_B].hex_val = 255;
+            change_mode(&led_config_s);
+            mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"ON",0);
+        }
+    }
+    else if(strcmp(data,"OFF") == 0){
+        led_config_s.mode = LED_MODE_STATIC;
+        led_config_s.brightness = 0;
+        led_config_s.channel[LEDC_R].hex_val = 0;
+        led_config_s.channel[LEDC_G].hex_val = 0;
+        led_config_s.channel[LEDC_B].hex_val = 0;
+        change_mode(&led_config_s);
+        mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"OFF",0);
+        
+    }
+    
 }
 
 void callback_set_static(esp_mqtt_event_handle_t event){
@@ -200,7 +247,7 @@ void callback_set_bightness(esp_mqtt_event_handle_t event){
     data[event->data_len] = '\0';
     str2int(&brightness,data,10);
     ESP_LOGE(TAG, "Setting brightness to [%d]",brightness);
-    global_brightness = brightness;
+    set_global_brightness(brightness);
 
 
     led_config_s = get_led_state();
@@ -235,7 +282,7 @@ void callback_set_random(esp_mqtt_event_handle_t event){
 /* Declaration of led tasks done*/
 void set_static_task_done_cb(void){
     ESP_LOGI(TAG,"set_static_task_done_cb");
-    mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hexify_colors(),1);
+    mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hass_colors(),0);
 }
 
 /* Declaration of led tasks done*/
@@ -244,7 +291,7 @@ void brightness_task_done_cb(void){
     char brightness[4];
     sprintf(brightness,"%d",global_brightness);
 
-    mqtt_pub(mqtt_configs[SET_FADE_INDEX].full_pub_topic,brightness,1);
+    mqtt_pub(mqtt_configs[SET_BRIGHTNESS_INDEX].full_pub_topic,brightness,0);
 }
 
 void app_main(){

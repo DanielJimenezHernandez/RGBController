@@ -19,7 +19,7 @@ bool server_started = false;
 
 static const char *TAG="HTTP Component";
 
-led_strip_config_t colors;
+sLedStripConfig_t colors;
 httpd_handle_t server_instance;
 
 /* An HTTP GET handler */
