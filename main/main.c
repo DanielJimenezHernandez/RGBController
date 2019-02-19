@@ -202,6 +202,9 @@ void callback_set_state(esp_mqtt_event_handle_t event){
             led_config_s.channel[LEDC_B].hex_val = 255;
             change_mode(&led_config_s);
             mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"ON",0);
+            char brightness[8];
+            sprintf(brightness,"%d",get_global_brightness());
+            mqtt_pub(mqtt_configs[SET_BRIGHTNESS_INDEX].full_pub_topic,brightness,0);
         }
     }
     else if(strcmp(data,"OFF") == 0){
@@ -289,7 +292,16 @@ void callback_set_random(esp_mqtt_event_handle_t event){
 /* Declaration of led tasks done*/
 void set_static_task_done_cb(void){
     ESP_LOGI(TAG,"set_static_task_done_cb");
+    char * colors = hass_colors();
+    ESP_LOGI(TAG, "ste colors for publidh %s",colors);
     mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hass_colors(),0);
+    if(strcmp(colors,"0,0,0") == 0){
+        mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"OFF",0);
+    }
+    else{
+        mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"ON",0);
+    }
+
 }
 
 #ifdef CONFIG_DHT_ENABLE

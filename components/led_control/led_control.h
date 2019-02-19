@@ -56,5 +56,6 @@ void led_register_done_cb(led_task_done_cb_t cb, eLed_mode mode);
 char* hexify_colors();
 char* hass_colors();
 void set_global_brightness(uint8_t brightness);
+uint8_t get_global_brightness();
 
 #endif /* LED_CONTROL_H */

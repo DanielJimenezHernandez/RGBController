@@ -141,6 +141,10 @@ void set_global_brightness(uint8_t brightness){
     global_brightness = brightness;
 }
 
+uint8_t get_global_brightness(){
+    return global_brightness;
+}
+
 //create a monitor with a list of supported resolutions
 //NOTE: Returns a heap allocated string, you are required to free it after use.
 char* jsonify_colors(void)
