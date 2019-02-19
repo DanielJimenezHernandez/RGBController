@@ -9,6 +9,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/timers.h"
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -23,12 +24,15 @@
 #include "http_component.h"
 #include "mdns_component.h"
 #include "storage_component.h"
+#include "dht.h"
 
 #include "global.h"
 #include "i2cdev.h"
 
 /*led finished callbacks*/
 void set_static_task_done_cb(void);
+
+TimerHandle_t sensor_data_timer_h;
 
 static const char *TAG = "Main";
 
@@ -126,6 +130,9 @@ void callback(State st){
     switch(st){
         case STATE_INIT:
             led_control_init();
+#ifdef CONFIG_DHT_ENABLE
+            dht_init();
+#endif
             initialize_external_rtc();
             break;
         case STATE_WIFI_CONNECTING:
@@ -195,6 +202,9 @@ void callback_set_state(esp_mqtt_event_handle_t event){
             led_config_s.channel[LEDC_B].hex_val = 255;
             change_mode(&led_config_s);
             mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"ON",0);
+            char brightness[8];
+            sprintf(brightness,"%d",get_global_brightness());
+            mqtt_pub(mqtt_configs[SET_BRIGHTNESS_INDEX].full_pub_topic,brightness,0);
         }
     }
     else if(strcmp(data,"OFF") == 0){
@@ -282,8 +292,32 @@ void callback_set_random(esp_mqtt_event_handle_t event){
 /* Declaration of led tasks done*/
 void set_static_task_done_cb(void){
     ESP_LOGI(TAG,"set_static_task_done_cb");
+    char * colors = hass_colors();
+    ESP_LOGI(TAG, "ste colors for publidh %s",colors);
     mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hass_colors(),0);
+    if(strcmp(colors,"0,0,0") == 0){
+        mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"OFF",0);
+    }
+    else{
+        mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"ON",0);
+    }
+
 }
+
+#ifdef CONFIG_DHT_ENABLE
+sensor_data_t data;
+void publish_sensor_data( TimerHandle_t xTimer ){
+    char temp[16];
+    char hum[16];
+    get_dht_data(&data);
+
+    sprintf(temp,"%.2f",data.temperature);
+    sprintf(hum,"%.2f",data.humidity);
+
+    mqtt_pub("RGB/temp",temp,0);
+    mqtt_pub("RGB/hum",hum,0);
+}
+#endif
 
 /* Declaration of led tasks done*/
 void brightness_task_done_cb(void){
@@ -349,5 +383,17 @@ void app_main(){
    
     /*Set mqtt configs and callbacks the actual init will be done in state machine*/
     mqtt_set_config(&mqtt_configs);
-    
+
+/*If DHT enabled start a timer to publish every 5 minutes*/
+#ifdef CONFIG_DHT_ENABLE
+
+    sensor_data_timer_h = xTimerCreate("sensor_data timer",
+                            60000 * 1 / portTICK_PERIOD_MS,
+                            pdTRUE,
+                            NULL,
+                            publish_sensor_data);
+    xTimerStart(sensor_data_timer_h,0);
+
+#endif
+
 }
