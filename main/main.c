@@ -129,6 +129,7 @@ sLedStripConfig_t led_config_s;
 void callback(State st){
     switch(st){
         case STATE_INIT:
+            ESP_LOGD(TAG, "STATE_INIT");
             led_control_init();
 #ifdef CONFIG_DHT_ENABLE
             dht_init();
@@ -136,24 +137,25 @@ void callback(State st){
             initialize_external_rtc();
             break;
         case STATE_WIFI_CONNECTING:
-            ESP_LOGI(TAG, "Setting mode to LED_MODE_CONNECTING_TO_AP");
+            ESP_LOGD(TAG, "STATE_WIFI_CONNECTING");
             /*Colors for the config mode*/
-            // led_config_s.channel[LEDC_R].hex_val = 35;
-            // led_config_s.channel[LEDC_G].hex_val = 67;
-            // led_config_s.channel[LEDC_B].hex_val = 88;
-            // led_config_s.mode = LED_MODE_CONNECTING_TO_AP;
+            led_config_s.channel[LEDC_R].hex_val = 35;
+            led_config_s.channel[LEDC_G].hex_val = 67;
+            led_config_s.channel[LEDC_B].hex_val = 88;
+            led_config_s.mode = LED_MODE_CONNECTING_TO_AP;
 
-            // change_mode(&led_config_s);
+            change_mode(&led_config_s);
             break;
         case STATE_WIFI_CONNECTED:
-            ESP_LOGI(TAG, "Wifi Connected to station");
+            ESP_LOGD(TAG, "STATE_WIFI_CONNECTED");
+            /*ToDo Grab timezone from client config*/
             initialize_sntp("CST6CDT,M4.1.0,M10.5.0");
             start_webserver();
             initialise_mdns((char*)&_global_configs.deviceID_str_global[0]);
             mqtt_init();
             break;
         case STATE_AP_STARTED:
-            ESP_LOGI(TAG, "ESP_WIFI_MODE_AP ");
+            ESP_LOGD(TAG, "STATE_AP_STARTED");
             /*Colors for the config mode*/
             // led_config_s.channel[LEDC_R].hex_val = 5;
             // led_config_s.channel[LEDC_G].hex_val = 61;
@@ -163,14 +165,16 @@ void callback(State st){
             start_webserver();
             break;
         case STATE_AP_GOT_CONFIG:
-            ESP_LOGI(TAG, "STATE_AP_GOT_CONFIG try to connect to new ap");
+            ESP_LOGD(TAG, "STATE_AP_GOT_CONFIG");
             wifi_init_sta_new(&global_ssid[0],&global_passwd[0]);
             break;
         case STATE_MQTT_CONNECTED:
-            ESP_LOGI(TAG, "MQTT Connected and ready to receive messages");
+            ESP_LOGD(TAG, "STATE_MQTT_CONNECTED");
             led_config_s.mode = LED_MODE_STOPPED;
             change_mode(&led_config_s);
-            mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hass_colors(),0);
+            char color_response[16];
+            hass_colors(&color_response[0]);
+            mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,color_response,0);
             break;
         case STATE_RGB_STARTING:
             break;
@@ -178,6 +182,7 @@ void callback(State st){
             wifi_component_init();
             break;
         case STATE_UNDEFINED:
+            ESP_LOGD(TAG,"STATE_UNDEFINED");
             break;
         default:
             ESP_LOGI(TAG, "Unhandled Event");
@@ -202,6 +207,9 @@ void callback_set_state(esp_mqtt_event_handle_t event){
             led_config_s.channel[LEDC_B].hex_val = 255;
             change_mode(&led_config_s);
             mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"ON",0);
+            char brightness[8];
+            sprintf(brightness,"%d",get_global_brightness());
+            mqtt_pub(mqtt_configs[SET_BRIGHTNESS_INDEX].full_pub_topic,brightness,0);
         }
     }
     else if(strcmp(data,"OFF") == 0){
@@ -289,7 +297,18 @@ void callback_set_random(esp_mqtt_event_handle_t event){
 /* Declaration of led tasks done*/
 void set_static_task_done_cb(void){
     ESP_LOGI(TAG,"set_static_task_done_cb");
-    mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,hass_colors(),0);
+    char colors_hass[16];
+    memset(colors_hass,0,sizeof(colors_hass));
+    hass_colors(&colors_hass[0]);
+    ESP_LOGD(TAG, "static colors for publish %s",colors_hass);
+    mqtt_pub(mqtt_configs[SET_STATIC_INDEX].full_pub_topic,colors_hass,0);
+    if(strcmp(colors_hass,"0,0,0") == 0){
+        mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"OFF",0);
+    }
+    else{
+        mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"ON",0);
+    }
+
 }
 
 #ifdef CONFIG_DHT_ENABLE
@@ -367,7 +386,7 @@ void app_main(){
     led_register_done_cb(set_static_task_done_cb,LED_MODE_STATIC);
     led_register_done_cb(brightness_task_done_cb,LED_MODE_BRIGHTNESS);
     /* Set state machine to init*/
-    set_system_state(STATE_INIT);
+    
    
     /*Set mqtt configs and callbacks the actual init will be done in state machine*/
     mqtt_set_config(&mqtt_configs);
@@ -383,5 +402,5 @@ void app_main(){
     xTimerStart(sensor_data_timer_h,0);
 
 #endif
-
+    set_system_state(STATE_INIT);
 }

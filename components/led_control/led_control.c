@@ -141,6 +141,10 @@ void set_global_brightness(uint8_t brightness){
     global_brightness = brightness;
 }
 
+uint8_t get_global_brightness(){
+    return global_brightness;
+}
+
 //create a monitor with a list of supported resolutions
 //NOTE: Returns a heap allocated string, you are required to free it after use.
 char* jsonify_colors(void)
@@ -171,12 +175,11 @@ char* hexify_colors(){
 }
 
 /*Home assistant compliant response*/
-char* hass_colors(){
-    sprintf(hexyfy_buffer,"%d,%d,%d",
+void hass_colors(char * buffer){
+    sprintf(buffer,"%d,%d,%d",
             global_led_state.channel[LEDC_R].hex_val,
             global_led_state.channel[LEDC_G].hex_val,
             global_led_state.channel[LEDC_B].hex_val);
-    return &hexyfy_buffer[0];
 } 
 
 sLedStripConfig_t get_led_state(){
@@ -217,7 +220,7 @@ void adjust_brightness(asChannels_t color, asChannels_t colorAdj, uint8_t bright
 }
 
 void set_color(asChannels_t cfg, bool gamma){
-
+    ESP_LOGD(TAG,"set_color called");
     asChannels_t color,colorBrightnessAdj;
     memcpy(color,cfg,sizeof(asChannels_t));
 
@@ -233,7 +236,7 @@ void set_color(asChannels_t cfg, bool gamma){
 
 void smooth_color_transition(asChannels_t cfg, uint16_t time_ms, bool blocking){
     /* convert color to duty*/
-    ESP_LOGD(TAG,"smooth_color_transition");
+    ESP_LOGD(TAG,"smooth_color_transition called");
     asChannels_t colorBrightnessAdj,color;
     esp_err_t err;
     memcpy(color,cfg,sizeof(asChannels_t));
@@ -297,6 +300,7 @@ void smooth_color_transition(asChannels_t cfg, uint16_t time_ms, bool blocking){
 
 
 void led_task_set_connecting(void *pvParameter){
+    ESP_LOGD(TAG,"Starting task [led_task_set_connecting] - led_task_set_connecting");
     sLedStripConfig_t *ptr_led_config;
     ptr_led_config = (sLedStripConfig_t *)pvParameter;
     sLedStripConfig_t off_colors;
@@ -328,9 +332,11 @@ void led_task_set_connecting(void *pvParameter){
 
 /*routine to set a color change from mqtt or http*/
 void led_task_set_static(void *pvParameter){
+    ESP_LOGD(TAG,"Starting task [led_task_set_static]");
     EventBits_t brightness_set;
     while(1){
         asChannels_t channels;
+        ESP_LOGD(TAG,"Waiting for an item in the led_task_set_static queue");
         xQueueReceive( xqTaskStatic, &( channels ), portMAX_DELAY );
         xSemaphoreTake(xLedMutex,portMAX_DELAY);
         smooth_color_transition(channels,DEFAULT_FADE_TRANSITION,false);
@@ -370,7 +376,7 @@ inline sLedFadeParams_t get_step_rate(uint32_t start, uint32_t end, uint32_t fad
 }
 
 void led_task_set_fade(void *pvParameter){
-    ESP_LOGI(TAG,"led_task_set_fade started");
+    ESP_LOGD(TAG,"Starting task [led_task_set_fade]");
     /*Pointer to the led config structure (Needs to be filled before unblock)*/
     sLedStripConfig_t *ptr_led_config = (sLedStripConfig_t *)pvParameter;
     /*Flags to indicate end of color fade*/
@@ -384,7 +390,7 @@ void led_task_set_fade(void *pvParameter){
     
     
     for ( ;; ){
-        ESP_LOGI(TAG,"[led_task_set_fade] Waiting for signal...");
+        ESP_LOGD(TAG,"Waiting for EG_FADE_START_BIT - led_task_set_fade");
         xEventGroupWaitBits(eGLed_task_set_fade,
                             EG_FADE_START_BIT,
                             pdFALSE,
@@ -477,46 +483,51 @@ void led_task_set_fade(void *pvParameter){
 
 /*This function starts tasks with routines fot the leds*/
 void change_mode(sLedStripConfig_t *rgb_config){
-    
+    ESP_LOGD(TAG, "Led Change mode:");
     if(xEventGroupGetBits(eGLed_task_set_fade) && EG_FADE_START_BIT){
         xEventGroupSetBits(eGLed_task_set_fade,EG_FADE_CANCEL_BIT);
     }
     switch(rgb_config->mode){
         case LED_MODE_CONNECTING_TO_AP:
+            ESP_LOGD(TAG, "---LED_MODE_CONNECTING_TO_AP");
             /*Notify the task to start*/
             memcpy(&rgb_config_connecting, rgb_config, sizeof(sLedStripConfig_t));
             xEventGroupSetBits(eGLed_task_set_connecting,
                                 EG_CONNECTING_START_BIT);
             break;
         case LED_MODE_READY_FOR_CONFIG:
+            ESP_LOGD(TAG, "---LED_MODE_READY_FOR_CONFIG");
             break;
         case LED_MODE_STATIC:
             /*Send the colors to set to the queue*/
+            ESP_LOGD(TAG, "---LED_MODE_STATIC");
             xQueueSend( xqTaskStatic, ( void * ) &rgb_config->channel, ( TickType_t ) 0 );
-            ESP_LOGI(TAG, "LED_MODE_STATIC");
             break;
         case LED_MODE_FADE:
             /*Notify the task to start*/
             memcpy(&rgb_config_fade, rgb_config, sizeof(sLedStripConfig_t));
-            ESP_LOGI(TAG, "LED_MODE_FADE");
+            ESP_LOGD(TAG, "---LED_MODE_FADE");
             xEventGroupSetBits(eGLed_task_set_fade,
                                 EG_FADE_START_BIT);
             break;
         case LED_MODE_RANDOM_FADE:
+            ESP_LOGD(TAG, "---LED_MODE_RANDOM_FADE");
             break;
         case LED_MODE_MUSIC:
+            ESP_LOGD(TAG, "---LED_MODE_MUSIC");
             break;
         case LED_MODE_BEAT:
+            ESP_LOGD(TAG, "---LED_MODE_BEAT");
             break;
         case LED_MODE_STROBE:
+            ESP_LOGD(TAG, "---LED_MODE_STROBE");
             break;
         case LED_MODE_STOPPED:
             break;
         case LED_MODE_BRIGHTNESS:
+            ESP_LOGD(TAG, "---LED_MODE_BRIGHTNESS");
             xQueueSend( xqTaskStatic, ( void * ) global_led_state.channel, ( TickType_t ) 0 );
             xEventGroupSetBits(eGLedNotifyGroup,EG_BRIGHTNESS_SET_BIT);
-            ESP_LOGI(TAG, "LED_MODE_STATIC");
-
     }
 }
 
@@ -527,10 +538,10 @@ void led_register_done_cb(led_task_done_cb_t cb, eLed_mode mode){
 
 void led_control_init()
 {   
+    ESP_LOGD(TAG, "Initializing led component");
     int ch;
 
     xLedMutex = xSemaphoreCreateMutex();
-    set_system_state(STATE_RGB_STARTING);
 
     /* event groups creation*/
     eGLed_task_set_connecting   = xEventGroupCreate();

@@ -27,7 +27,7 @@ typedef enum
     DHT_TYPE_DHT22      //!< DHT22
 } dht_sensor_type_t;
 
-#define DHT_TYPE DHT_TYPE_DHT22
+#define DHT_TYPE DHT_TYPE_DHT11
 
 typedef struct{
         float humidity;
