@@ -3,6 +3,7 @@
 #include <esp_log.h>
 #include <esp_system.h>
 #include <sys/param.h>
+#include "cJSON.h"
 
 #include "led_control.h"
 #include "statemachine.h"
@@ -18,6 +19,8 @@
 bool server_started = false;
 
 static const char *TAG="HTTP Component";
+
+sLedStripConfig_t led_config_struct;
 
 sLedStripConfig_t colors;
 httpd_handle_t server_instance;
@@ -52,6 +55,65 @@ httpd_uri_t api_get_color_handler_s = {
     .handler   = api_get_color_handler,
 };
 
+esp_err_t api_set_color_handler(httpd_req_t *req)
+{
+    char buf[100];
+    char* resp_str = malloc(64);
+    int ret = 0, remaining = req->content_len;
+
+    while (remaining > 0) {
+        /* Read the data for the request */
+        if ((ret = httpd_req_recv(req, buf,
+                        MIN(remaining, sizeof(buf)))) <= 0) {
+            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+                /* Retry receiving if timeout occurred */
+                continue;
+            }
+            return ESP_FAIL;
+        }
+
+        remaining -= ret;
+
+    }
+    if (ret != 0){
+        buf[ret] = '\0';
+        // End response
+        // httpd_resp_send_chunk(req, NULL, 0);
+        ESP_LOGI(TAG, "Parsing Request to json");
+        cJSON *json = cJSON_Parse(buf);
+        cJSON *colors;
+        colors = cJSON_GetObjectItem(json, "colors");
+        int red = cJSON_GetObjectItem(colors, "red")->valueint;
+        int green = cJSON_GetObjectItem(colors, "green")->valueint;
+        int blue = cJSON_GetObjectItem(colors, "blue")->valueint;
+
+        ESP_LOGI(TAG, "r[%d]g[%d]b[%d]",red,green,blue);
+
+
+        led_config_struct.mode = LED_MODE_STATIC;
+        led_config_struct.brightness = 0;
+        led_config_struct.channel[LEDC_R].hex_val = red;
+        led_config_struct.channel[LEDC_G].hex_val = green;
+        led_config_struct.channel[LEDC_B].hex_val = blue;
+        change_mode(&led_config_struct);
+
+        /*TODO:Send response if changemode was correct*/
+        sprintf(resp_str,"%s","{status: ok}");
+        httpd_resp_send(req, resp_str, strlen(resp_str));
+
+        return ESP_OK;
+    }
+
+    return ESP_FAIL;
+    
+}
+
+httpd_uri_t api_set_color_handler_s = {
+    .uri       = "/api/SetColor",
+    .method    = HTTP_POST,
+    .handler   = api_set_color_handler,
+};
+
 esp_err_t api_set_creds_handler(httpd_req_t *req)
 {
     char*  buf;
@@ -60,11 +122,7 @@ esp_err_t api_set_creds_handler(httpd_req_t *req)
     char ssid[32],passwd[32];
     memset(ssid,0,sizeof(ssid));
     memset(passwd,0,sizeof(passwd));
-    /* Get header value string length and allocate memory for length + 1,
-     * extra byte for null termination */
-
-    colors = get_led_state();
-    
+   
 
     /* Read URL query string length and allocate memory for length + 1,
      * extra byte for null termination */
@@ -133,6 +191,7 @@ httpd_handle_t start_webserver(void)
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &api_get_color_handler_s);
         httpd_register_uri_handler(server, &api_set_creds_handler_s);
+        httpd_register_uri_handler(server, &api_set_color_handler_s);
         server_instance = server;
         return server;
     }
