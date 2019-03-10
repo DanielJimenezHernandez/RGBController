@@ -41,7 +41,7 @@ void initialize_sntp(char *tz)
     const int retry_count = 10;
 
     sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, "pool.ntp.org");
+    sntp_setservername(0, "mx.pool.ntp.org");
     sntp_init();
 
     while(timeinfo.tm_year < (2016 - 1900) && ++retry < retry_count) {
