@@ -117,6 +117,5 @@ void mqtt_set_config(mqtt_subscribers_t *config){
 }
 
 void mqtt_pub(char *topic, char *payload, uint8_t retain){
-    ESP_LOGE(TAG, "Publishing [%s] to [%s]",payload, topic);
     esp_mqtt_client_publish(client_handle, topic, payload, 0, 0, retain);
 }

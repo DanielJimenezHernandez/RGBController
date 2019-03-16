@@ -1,10 +1,15 @@
 #ifndef LED_CONTROL_H
 #define LED_CONTROL_H
 
+#include "driver/ledc.h"
+
 #define LEDC_CH_NUM       (3)
 #define LEDC_R             0
 #define LEDC_G             1
 #define LEDC_B             2
+
+#define TIMER_DUTY_RES         LEDC_TIMER_13_BIT
+#define MAX_DUTY ((0x01 << TIMER_DUTY_RES) - 1)
 
 /* must match with the eLed_mode enum below*/ 
 #define LED_TASKS_NUMBER 10
@@ -57,5 +62,6 @@ char* hexify_colors();
 void hass_colors(char * buffer);
 void set_global_brightness(uint8_t brightness);
 uint8_t get_global_brightness();
+void set_duty_chan(uint32_t duty, uint8_t ch);
 
 #endif /* LED_CONTROL_H */

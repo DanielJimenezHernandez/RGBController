@@ -5,7 +5,7 @@
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
 
-#include "driver/ledc.h"
+
 #include "esp_err.h"
 #include "esp_log.h"
 #include "cJSON.h"
@@ -23,7 +23,7 @@
 #define LEDC_HS_G_CHANNEL      LEDC_CHANNEL_1
 #define LEDC_HS_B_GPIO         CONFIG_RGB_CONTROLLER_B_Channel
 #define LEDC_HS_B_CHANNEL      LEDC_CHANNEL_2
-#define TIMER_DUTY_RES         LEDC_TIMER_13_BIT
+
 
 #define UP_D    1
 #define DOWN_D  0
@@ -72,7 +72,7 @@ uint8_t global_brightness = 100;
 
 sLedStripConfig_t off_colors;
 
-uint32_t max_duty = (0x01 << TIMER_DUTY_RES) - 1;
+
 
 
 /*Configuration structures*/
@@ -129,9 +129,9 @@ ledc_channel_config_t ledc_channel[LEDC_CH_NUM] = {
 
 uint32_t gamma_correction(uint32_t duty){
 
-    double base = (double) duty / max_duty;
+    double base = (double) duty / MAX_DUTY;
     double correction_factor = 2.8;
-    double corrected_val = pow( base, correction_factor ) * (max_duty + 0.5);
+    double corrected_val = pow( base, correction_factor ) * (MAX_DUTY + 0.5);
     corrected_val = (corrected_val > (floor(corrected_val)+0.5f)) ? ceil(corrected_val) : floor(corrected_val);
 
     return (uint32_t)corrected_val;
@@ -187,11 +187,11 @@ sLedStripConfig_t get_led_state(){
 }
 
 uint32_t hex2duty(uint8_t hex){
-    return hex * max_duty / 255;
+    return hex * MAX_DUTY / 255;
 }
 
 uint8_t duty2hex(uint32_t duty){
-    return duty * 255 / max_duty;
+    return duty * 255 / MAX_DUTY;
 } 
 
 void set_duty_chan(uint32_t duty, uint8_t ch){
@@ -219,7 +219,7 @@ void adjust_brightness(asChannels_t color, asChannels_t colorAdj, uint8_t bright
     colorAdj[LEDC_B].hex_val = brightness * color[LEDC_B].hex_val / 100;
 }
 
-void set_color(asChannels_t cfg, bool gamma){
+void set_color(asChannels_t cfg){
     ESP_LOGD(TAG,"set_color called");
     asChannels_t color,colorBrightnessAdj;
     memcpy(color,cfg,sizeof(asChannels_t));
@@ -592,5 +592,5 @@ void led_control_init()
         ESP_LOGE(TAG,"Unable to create [led_task_set_static] task");
     }
 
-    set_system_state(STATE_RGB_STARTED);
+    //set_system_state(STATE_RGB_STARTED);
 }

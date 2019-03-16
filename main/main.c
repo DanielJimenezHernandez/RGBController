@@ -25,6 +25,11 @@
 #include "mdns_component.h"
 #include "storage_component.h"
 #include "dht.h"
+#include "sound_component.h"
+//ws1228b
+#include "dled_pixel.h"
+#include "dled_strip.h"
+#include "esp32_rmt_dled.h"
 
 #include "global.h"
 #include "i2cdev.h"
@@ -335,6 +340,56 @@ void brightness_task_done_cb(void){
     mqtt_pub(mqtt_configs[SET_BRIGHTNESS_INDEX].full_pub_topic,brightness,0);
 }
 
+void delay_ms(uint32_t ms)
+{
+    if (ms == 0) return;
+    vTaskDelay(ms / portTICK_PERIOD_MS);
+}
+
+
+
+
+void test_ws1228b(void *pvParameter){
+    esp_err_t err;
+    rmt_pixel_strip_t rps;
+    pixel_strip_t strip;
+
+    dled_strip_init(&strip);
+    dled_strip_create(&strip, DLED_WS281x, 30, 255);
+
+    err = rmt_dled_create(&rps, &strip);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "[0x%x] rmt_dled_init failed", err);
+        while(true) { }
+    }
+
+    err = rmt_dled_config(&rps, 18, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "[0x%x] rmt_dled_config failed", err);
+        while(true) { }
+    }
+    while(1){
+        uint16_t step;
+        step = 0;
+        while (step < 6 * strip.length) {
+            dled_pixel_move_pixel(strip.pixels, strip.length, strip.max_cc_val, step);
+            dled_strip_fill_buffer(&strip);
+            rmt_dled_send(&rps);
+            step++;
+            delay_ms(20);
+        }
+
+        step = 0;
+        while (true) {
+            dled_pixel_rainbow_step(strip.pixels, strip.length, strip.max_cc_val, step);
+            dled_strip_fill_buffer(&strip);
+            rmt_dled_send(&rps);
+            step++;
+            delay_ms(50);
+        }
+    }
+}
+
 void app_main(){
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -402,5 +457,8 @@ void app_main(){
     xTimerStart(sensor_data_timer_h,0);
 
 #endif
-    set_system_state(STATE_INIT);
+    led_control_init();
+    //sound_init();
+    xTaskCreate(&test_ws1228b,"test_ws1228b",2048,NULL,5,NULL);
+    //set_system_state(STATE_INIT);
 }
