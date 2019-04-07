@@ -67,7 +67,7 @@ char system_time_str[64];
 #define FULL_SUB_BRIGHTNESS_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_BRIGHTNESS
 #define FULL_PUB_BRIGHTNESS_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_LED_BRIGHTNESS "/" TOPIC_STATE
 
-#define FULL_SUB_STATE_TOPIC BASE_TOPIC "/" DEVICE_NAME 
+#define FULL_SUB_STATE_TOPIC BASE_TOPIC "/" DEVICE_NAME
 #define FULL_PUB_STATE_TOPIC BASE_TOPIC "/" DEVICE_NAME "/" TOPIC_STATE
 
 #define SET_STATIC_INDEX 0
@@ -225,9 +225,9 @@ void callback_set_state(esp_mqtt_event_handle_t event){
         led_config_s.channel[LEDC_B].hex_val = 0;
         change_mode(&led_config_s);
         mqtt_pub(mqtt_configs[SET_STATE_INDEX].full_pub_topic,"OFF",0);
-        
+
     }
-    
+
 }
 
 void callback_set_static(esp_mqtt_event_handle_t event){
@@ -355,7 +355,7 @@ void test_ws1228b(void *pvParameter){
     pixel_strip_t strip;
 
     dled_strip_init(&strip);
-    dled_strip_create(&strip, DLED_WS281x, 30, 255);
+    dled_strip_create(&strip, DLED_WS281x, 10, 255);
 
     err = rmt_dled_create(&rps, &strip);
     if (err != ESP_OK) {
@@ -371,6 +371,28 @@ void test_ws1228b(void *pvParameter){
     while(1){
         uint16_t step;
         step = 0;
+        // dled_pixel_set(&strip.pixels[0],255,0,0);
+        // dled_pixel_set(&strip.pixels[1],0,255,0);
+        // dled_pixel_set(&strip.pixels[2],0,0,255);
+        // dled_strip_fill_buffer(&strip);
+        // rmt_dled_send(&rps);
+
+
+
+        // strip.pixels->r = 0;
+        // strip.pixels->g = 255;
+        // strip.pixels->b = 0;
+        // dled_strip_fill_buffer(&strip);
+        // rmt_dled_send(&rps);
+        // strip.pixels++;
+        //
+        // strip.pixels->r = 0;
+        // strip.pixels->g = 0;
+        // strip.pixels->b = 255;
+        // dled_strip_fill_buffer(&strip);
+        // rmt_dled_send(&rps);
+        // strip.pixels++;
+
         while (step < 6 * strip.length) {
             dled_pixel_move_pixel(strip.pixels, strip.length, strip.max_cc_val, step);
             dled_strip_fill_buffer(&strip);
@@ -378,7 +400,7 @@ void test_ws1228b(void *pvParameter){
             step++;
             delay_ms(20);
         }
-
+        
         step = 0;
         while (true) {
             dled_pixel_rainbow_step(strip.pixels, strip.length, strip.max_cc_val, step);
@@ -409,7 +431,7 @@ void app_main(){
         /*Generate a unique device id from the device mac address*/
         uint8_t mac[6];
         esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    
+
         mbedtls_md5_ret( (unsigned char *)mac,6,deviceID );
 
         sprintf(deviceID_str,"%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",deviceID[0],
@@ -441,8 +463,8 @@ void app_main(){
     led_register_done_cb(set_static_task_done_cb,LED_MODE_STATIC);
     led_register_done_cb(brightness_task_done_cb,LED_MODE_BRIGHTNESS);
     /* Set state machine to init*/
-    
-   
+
+
     /*Set mqtt configs and callbacks the actual init will be done in state machine*/
     mqtt_set_config(&mqtt_configs);
 
