@@ -30,6 +30,7 @@
 #include "dled_pixel.h"
 #include "dled_strip.h"
 #include "esp32_rmt_dled.h"
+#include "ws_control.h"
 
 #include "global.h"
 #include "i2cdev.h"
@@ -350,27 +351,30 @@ void delay_ms(uint32_t ms)
 
 
 void test_ws1228b(void *pvParameter){
-    esp_err_t err;
+    // esp_err_t err;
     rmt_pixel_strip_t rps;
     pixel_strip_t strip;
 
-    dled_strip_init(&strip);
-    dled_strip_create(&strip, DLED_WS281x, 10, 255);
+    ws_control_init(&rps, &strip);
+    ws_control_main_config(DLED_WS281x, 10, 1, 255);
 
-    err = rmt_dled_create(&rps, &strip);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "[0x%x] rmt_dled_init failed", err);
-        while(true) { }
-    }
-
-    err = rmt_dled_config(&rps, 18, 0);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "[0x%x] rmt_dled_config failed", err);
-        while(true) { }
-    }
-    while(1){
-        uint16_t step;
-        step = 0;
+    // dled_strip_init(&strip);
+    // dled_strip_create(&strip, DLED_WS281x, 10, 255);
+    //
+    // err = rmt_dled_create(&rps, &strip);
+    // if (err != ESP_OK) {
+    //     ESP_LOGE(TAG, "[0x%x] rmt_dled_init failed", err);
+    //     while(true) { }
+    // }
+    //
+    // err = rmt_dled_config(&rps, 18, 0);
+    // if (err != ESP_OK) {
+    //     ESP_LOGE(TAG, "[0x%x] rmt_dled_config failed", err);
+    //     while(true) { }
+    // }
+    // while(1){
+        // uint16_t step;
+        // step = 0;
         // dled_pixel_set(&strip.pixels[0],255,0,0);
         // dled_pixel_set(&strip.pixels[1],0,255,0);
         // dled_pixel_set(&strip.pixels[2],0,0,255);
@@ -392,24 +396,24 @@ void test_ws1228b(void *pvParameter){
         // dled_strip_fill_buffer(&strip);
         // rmt_dled_send(&rps);
         // strip.pixels++;
-
-        while (step < 6 * strip.length) {
-            dled_pixel_move_pixel(strip.pixels, strip.length, strip.max_cc_val, step);
-            dled_strip_fill_buffer(&strip);
-            rmt_dled_send(&rps);
-            step++;
-            delay_ms(20);
-        }
-        
-        step = 0;
-        while (true) {
-            dled_pixel_rainbow_step(strip.pixels, strip.length, strip.max_cc_val, step);
-            dled_strip_fill_buffer(&strip);
-            rmt_dled_send(&rps);
-            step++;
-            delay_ms(50);
-        }
-    }
+        //
+        // while (step < 6 * strip.length) {
+        //     dled_pixel_move_pixel(strip.pixels, strip.length, strip.max_cc_val, step);
+        //     dled_strip_fill_buffer(&strip);
+        //     rmt_dled_send(&rps);
+        //     step++;
+        //     delay_ms(20);
+        // }
+        //
+        // step = 0;
+        // while (true) {
+        //     dled_pixel_rainbow_step(strip.pixels, strip.length, strip.max_cc_val, step);
+        //     dled_strip_fill_buffer(&strip);
+        //     rmt_dled_send(&rps);
+        //     step++;
+        //     delay_ms(50);
+        // }
+    // }
 }
 
 void app_main(){
